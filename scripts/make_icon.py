@@ -87,3 +87,24 @@ print("wrote installer/wizard.bmp")
 # Window/taskbar icon embedded in the app at build time (raw 64x64 RGBA, see src/main.rs).
 open("assets/penadf-64.rgba", "wb").write(png(master, 64).tobytes())
 print("wrote assets/penadf-64.rgba")
+
+# MSIX / Microsoft Store tiles (packaging/msix/Assets). Logos sit on a transparent background
+# with padding, as Windows' Start menu and taskbar expect.
+def tile(size, logo_frac, w=None):
+    w = w or size
+    canvas = Image.new("RGBA", (w, size), (0, 0, 0, 0))
+    s = int(size * logo_frac)
+    art = png(small() if s <= 32 else master, s)
+    canvas.alpha_composite(art, ((w - s) // 2, (size - s) // 2))
+    return canvas
+
+os.makedirs("packaging/msix/Assets", exist_ok=True)
+tile(50, 0.9).save("packaging/msix/Assets/StoreLogo.png")
+tile(44, 0.92).save("packaging/msix/Assets/Square44x44Logo.png")
+tile(150, 0.66).save("packaging/msix/Assets/Square150x150Logo.png")
+tile(150, 0.66, w=310).save("packaging/msix/Assets/Wide310x150Logo.png")
+tile(44, 0.92).save("packaging/msix/Assets/FileLogo.png")
+# Unplated taskbar icons (no tile plate behind them) at the scales Windows asks for.
+for s in (16, 24, 32, 48, 256):
+    tile(s, 1.0).save(f"packaging/msix/Assets/Square44x44Logo.targetsize-{s}_altform-unplated.png")
+print("wrote packaging/msix/Assets")

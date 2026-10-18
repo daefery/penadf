@@ -35,8 +35,11 @@ fn uri_escape(s: &str) -> String {
 #[cfg(windows)]
 mod imp {
     use super::*;
+    use windows_sys::Win32::Storage::Packaging::Appx::GetCurrentPackageFamilyName;
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_SZ, RegGetValueW};
-    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::Shell::{
+        ASSOCF_INIT_IGNOREUNKNOWN, ASSOCSTR_EXECUTABLE, AssocQueryStringW, ShellExecuteW,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         ASFW_ANY, AllowSetForegroundWindow, SW_SHOWNORMAL,
     };
@@ -75,13 +78,52 @@ mod imp {
         )
     }
 
-    /// True when the installer registered PenaDF for this user.
+    /// The Microsoft Store package family name when PenaDF runs from its MSIX package.
+    pub fn package_family() -> Option<String> {
+        let mut len = 0u32;
+        unsafe { GetCurrentPackageFamilyName(&mut len, std::ptr::null_mut()) };
+        if len == 0 {
+            return None; // not packaged (installer or portable build)
+        }
+        let mut buf = vec![0u16; len as usize];
+        let rc = unsafe { GetCurrentPackageFamilyName(&mut len, buf.as_mut_ptr()) };
+        (rc == 0).then(|| String::from_utf16_lossy(&buf[..(len as usize).saturating_sub(1)]))
+    }
+
+    /// True when Windows lists PenaDF as a PDF app: installed by the installer, or from the Store.
     pub fn is_registered() -> bool {
-        read_hkcu(r"Software\RegisteredApplications", REGISTERED_APP).is_some()
+        package_family().is_some()
+            || read_hkcu(r"Software\RegisteredApplications", REGISTERED_APP).is_some()
+    }
+
+    /// The program Windows starts for .pdf (works for both installer and Store builds).
+    pub fn pdf_executable() -> Option<String> {
+        let ext = wide(".pdf");
+        let mut buf = vec![0u16; 1024];
+        let mut len = buf.len() as u32;
+        let rc = unsafe {
+            AssocQueryStringW(
+                ASSOCF_INIT_IGNOREUNKNOWN,
+                ASSOCSTR_EXECUTABLE,
+                ext.as_ptr(),
+                std::ptr::null(),
+                buf.as_mut_ptr(),
+                &mut len,
+            )
+        };
+        (rc == 0).then(|| String::from_utf16_lossy(&buf[..(len as usize).saturating_sub(1)]))
     }
 
     pub fn open_default_apps_settings() -> bool {
-        let (verb, file) = (wide("open"), wide(&default_apps_uri()));
+        // A Store install is identified by its app user model ID; an installer build by name.
+        let uri = match package_family() {
+            Some(family) => format!(
+                "ms-settings:defaultapps?registeredAUMID={}",
+                uri_escape(&format!("{family}!PenaDF"))
+            ),
+            None => default_apps_uri(),
+        };
+        let (verb, file) = (wide("open"), wide(&uri));
         let r = unsafe {
             ShellExecuteW(
                 std::ptr::null_mut(),
@@ -111,6 +153,12 @@ mod imp {
     pub fn is_registered() -> bool {
         false
     }
+    pub fn package_family() -> Option<String> {
+        None
+    }
+    pub fn pdf_executable() -> Option<String> {
+        None
+    }
     pub fn open_default_apps_settings() -> bool {
         false
     }
@@ -121,7 +169,16 @@ pub use imp::*;
 
 /// True when the user picked PenaDF as the default for .pdf.
 pub fn is_default_pdf_app() -> bool {
-    pdf_handler().is_some_and(|p| p.eq_ignore_ascii_case(PROG_ID))
+    if pdf_handler().is_some_and(|p| p.eq_ignore_ascii_case(PROG_ID)) {
+        return true;
+    }
+    // Store installs use a generated ProgID; compare the program Windows would start instead.
+    let ours = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+    let theirs =
+        pdf_executable().map(|p| p.rsplit(['\\', '/']).next().unwrap_or("").to_lowercase());
+    matches!((ours, theirs), (Some(a), Some(b)) if !a.is_empty() && a == b)
 }
 
 #[cfg(test)]

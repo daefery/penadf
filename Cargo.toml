@@ -32,7 +32,7 @@ eframe = { version = "0.37", default-features = false, features = ["x11", "wayla
 
 
 [target."cfg(windows)".dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_Packaging_Appx", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [features]
 # Dev only (README screenshots): EFRAME_SCREENSHOT_TO=<file.png> saves the first frames and

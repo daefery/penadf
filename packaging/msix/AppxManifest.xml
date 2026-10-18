@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PenaDF MSIX package for the Microsoft Store. The Store signs packages it publishes, so
+  Store installs show no SmartScreen warning (learn.microsoft.com/windows/apps/package-and-deploy/code-signing-options).
+
+  Identity Name and Publisher below are PLACEHOLDERS. Partner Center shows the real values after
+  the app name is reserved (Product identity page); scripts/build-msix.sh replaces them from
+  the PENADF_STORE_IDENTITY / PENADF_STORE_PUBLISHER / PENADF_STORE_PUBLISHER_NAME variables.
+
+  runFullTrust: PenaDF is a normal desktop app (Win32) that reads and writes PDFs the user opens.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 desktop rescap">
+
+  <Identity Name="@IDENTITY@" Publisher="@PUBLISHER@" Version="@VERSION@.0" ProcessorArchitecture="x64"/>
+
+  <Properties>
+    <DisplayName>PenaDF</DisplayName>
+    <PublisherDisplayName>@PUBLISHER_NAME@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Open, sign, comment on, fill, organize, compare and protect PDFs on your own PC, without the internet.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0"/>
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-US"/>
+    <Resource Language="id-ID"/>
+  </Resources>
+
+  <Applications>
+    <Application Id="PenaDF" Executable="PenaDF.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="PenaDF"
+        Description="Small, offline PDF app: sign, comment, fill, organize and protect PDFs."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"/>
+      </uap:VisualElements>
+      <Extensions>
+        <!-- Makes PenaDF a candidate for .pdf in "Open with" and Settings > Default apps. -->
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="pdf">
+            <uap:DisplayName>PDF Document</uap:DisplayName>
+            <uap:Logo>Assets\FileLogo.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType ContentType="application/pdf">.pdf</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+        <!-- "PenaDF" from Win+R or a terminal. -->
+        <uap3:Extension xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" Category="windows.appExecutionAlias" Executable="PenaDF.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="PenaDF.exe"/>
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust"/>
+  </Capabilities>
+</Package>
