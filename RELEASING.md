@@ -49,6 +49,15 @@ the repository URL. Before applying: two-step login on GitHub, a "Code signing p
 the README (text in SignPath's terms), and PRIVACY.md (done). After approval, add their signing
 step to `.github/workflows/ci.yml` before the release files are made.
 
+## macOS: removing the "cannot be checked" warning
+
+The `.dmg` is ad-hoc signed, so Gatekeeper asks users to allow it once (System Settings →
+Privacy & Security → Open Anyway; Control-click no longer works since macOS Sequoia). Removing
+that needs an Apple Developer Program membership ($99/year, developer.apple.com/programs),
+a Developer ID Application certificate, and notarization (`xcrun notarytool submit ... --wait`,
+then `xcrun stapler staple`). Add those steps to `scripts/build-macos.sh` and the macOS CI job,
+with the certificate and an app-specific password as GitHub secrets.
+
 ## After the first release
 
 - **winget:** submit a manifest to https://github.com/microsoft/winget-pkgs so people can run

@@ -9,6 +9,8 @@ pub mod engine;
 pub mod geometry;
 pub mod gui;
 pub mod instance;
+#[cfg(target_os = "macos")]
+pub mod macos;
 pub mod ops;
 pub mod page_range;
 pub mod winshell;

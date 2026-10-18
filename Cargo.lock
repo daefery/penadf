@@ -2093,15 +2093,18 @@ dependencies = [
 
 [[package]]
 name = "penadf"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
+ "block2 0.5.1",
  "eframe",
  "egui_kittest",
  "getrandom 0.4.3",
  "image",
  "interprocess",
  "lopdf",
+ "objc2 0.5.3",
+ "objc2-foundation 0.2.2",
  "pdfium-render",
  "rfd",
  "similar",

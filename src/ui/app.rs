@@ -458,7 +458,11 @@ impl PenaApp {
             .map_err(anyhow::Error::from)
             .and_then(|_| print_file(&path));
         if self.report(result).is_some() {
-            self.info("Sent to the default PDF printer handler.");
+            self.info(if cfg!(target_os = "macos") {
+                "Opened in Preview: choose File → Print there."
+            } else {
+                "Sent to the default PDF printer handler."
+            });
         }
     }
 
@@ -815,6 +819,12 @@ impl PenaApp {
         let has = self.doc.is_some();
         if cfg!(windows) && ui.button("Make PenaDF the default PDF app…").clicked() {
             self.open_default_apps();
+        }
+        if cfg!(target_os = "macos") && ui.button("Make PenaDF the default PDF app…").clicked() {
+            // macOS has no Settings page for this; the choice is made per file type in Finder.
+            self.info(
+                "In Finder, select any PDF, press ⌘I (Get Info), choose PenaDF under \"Open with\", then click \"Change All…\".",
+            );
         }
         ui.separator();
         ui.label(
@@ -2107,9 +2117,14 @@ fn with_ext(p: PathBuf, ext: &str) -> PathBuf {
 
 /// Per-user settings folder: %APPDATA%\PenaDF on Windows.
 fn settings_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
+    let home = || std::env::var_os("HOME").map(PathBuf::from);
+    let base = if cfg!(target_os = "macos") {
+        home()?.join("Library").join("Application Support")
+    } else {
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .or_else(|| home().map(|h| h.join(".config")))?
+    };
     Some(base.join("PenaDF"))
 }
 
@@ -2153,7 +2168,21 @@ fn print_file(path: &Path) -> Result<()> {
     }
 }
 
-#[cfg(not(windows))]
+/// macOS: opens the file in Preview's print dialog, so the user picks printer and pages.
+#[cfg(target_os = "macos")]
+fn print_file(path: &Path) -> Result<()> {
+    let status = std::process::Command::new("open")
+        .args(["-a", "Preview"])
+        .arg(path)
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        bail!("Could not open Preview to print. Save the file and print it from Preview.")
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn print_file(path: &Path) -> Result<()> {
     let status = std::process::Command::new("lp").arg(path).status()?;
     if status.success() {

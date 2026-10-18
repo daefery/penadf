@@ -1,9 +1,10 @@
-**PenaDF** is a small, offline PDF app for Windows: open, sign, comment on, fill, organize, compare and protect PDFs on your own PC. Free and open source; nothing is uploaded.
+**PenaDF** is a small, offline PDF app for Windows and macOS: open, sign, comment on, fill, organize, compare and protect PDFs on your own PC. Free and open source; nothing is uploaded.
 
 ### Download
 
 - **PenaDF-Setup.exe** (recommended): installs for your account, no admin rights. Indonesian or English, following Windows. Tick "Make PenaDF my default PDF app" on the last page to open PDFs with it.
 - **PenaDF-windows-x64.zip**: portable. Unzip and run `PenaDF.exe`, keeping `pdfium.dll` next to it.
+- **PenaDF-macOS.dmg**: for Apple Silicon and Intel Macs (macOS 11 or later). Drag PenaDF onto Applications. The first time, macOS asks you to allow it: System Settings → Privacy & Security → **Open Anyway** (PenaDF is not notarized by Apple yet).
 
 Checksums: `SHA256SUMS.txt`.
 
@@ -16,4 +17,4 @@ The installer is not code-signed yet, so Windows may show "Windows protected you
 - Fill forms; organize, merge, split, crop and rotate pages; compare two versions; password protection (AES-256).
 - Create PDFs from images and text (and from Office files when Microsoft Office or LibreOffice is installed); export to PNG/JPEG, TXT and HTML.
 
-Requires Windows 10 or 11, 64-bit.
+Requires Windows 10 or 11 (64-bit), or macOS 11 or later.

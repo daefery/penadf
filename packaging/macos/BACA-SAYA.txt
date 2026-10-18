@@ -1,0 +1,32 @@
+PenaDF for Mac
+
+1. Drag PenaDF onto the Applications folder.
+2. Open PenaDF from Applications. macOS will say it cannot check the app for
+   malicious software, because PenaDF is not notarized by Apple yet.
+3. Open System Settings > Privacy & Security, scroll down, and click
+   "Open Anyway" next to PenaDF. Then open PenaDF again and click "Open".
+   You only do this once.
+
+To open PDFs with PenaDF when you double-click them: in Finder, select any PDF,
+press Command-I (Get Info), choose PenaDF under "Open with", then click
+"Change All...".
+
+PenaDF works offline. Your files never leave your Mac.
+Source code and help: https://github.com/daefery/penadf
+
+---
+
+PenaDF untuk Mac
+
+1. Seret PenaDF ke folder Applications.
+2. Buka PenaDF dari Applications. macOS akan bilang aplikasi ini tidak bisa
+   diperiksa, karena PenaDF belum dinotarisasi oleh Apple.
+3. Buka System Settings > Privacy & Security, gulir ke bawah, lalu klik
+   "Open Anyway" di samping PenaDF. Buka PenaDF lagi dan klik "Open".
+   Cukup sekali saja.
+
+Agar PDF langsung terbuka di PenaDF saat diklik dua kali: di Finder, pilih
+salah satu PDF, tekan Command-I (Get Info), pilih PenaDF di bagian
+"Open with", lalu klik "Change All...".
+
+PenaDF bekerja tanpa internet. File Anda tidak pernah keluar dari Mac Anda.

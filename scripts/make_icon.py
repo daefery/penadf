@@ -108,3 +108,12 @@ tile(44, 0.92).save("packaging/msix/Assets/FileLogo.png")
 for s in (16, 24, 32, 48, 256):
     tile(s, 1.0).save(f"packaging/msix/Assets/Square44x44Logo.targetsize-{s}_altform-unplated.png")
 print("wrote packaging/msix/Assets")
+
+# macOS app icon (packaging/macos/PenaDF.icns). Apple's icon grid: the artwork sits inside
+# roughly 80% of the canvas. Pillow writes all the sizes macOS needs from one 1024 image.
+mac = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+art = png(master, 824)
+mac.alpha_composite(art, (100, 100))
+os.makedirs("packaging/macos", exist_ok=True)
+mac.save("packaging/macos/PenaDF.icns", format="ICNS")
+print("wrote packaging/macos/PenaDF.icns")

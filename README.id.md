@@ -7,11 +7,15 @@
   <a href="https://github.com/daefery/penadf/releases/latest/download/PenaDF-windows-x64.zip"><img alt="Unduh versi portabel" src="https://img.shields.io/badge/Unduh-Portabel%20.zip-1E2230?style=for-the-badge&logo=windows&logoColor=white"></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/daefery/penadf/releases/latest/download/PenaDF-macOS.dmg"><img alt="Unduh untuk macOS" src="https://img.shields.io/badge/Unduh-macOS%20.dmg-1E2230?style=for-the-badge&logo=apple&logoColor=white"></a>
+</p>
+
 <p align="center"><a href="README.md">Read in English</a></p>
 
 # PenaDF
 
-Aplikasi PDF kecil untuk Windows yang bekerja tanpa internet. Gratis dan open source.
+Aplikasi PDF kecil untuk Windows dan macOS yang bekerja tanpa internet. Gratis dan open source.
 
 Buka, baca, beri komentar, tanda tangani, isi formulir, gabung dan pisah halaman, bandingkan dua
 versi, dan kunci PDF dengan kata sandi. Semua berjalan di PC Anda. File Anda tidak dikirim ke
@@ -33,6 +37,19 @@ mana pun.
 4. Untuk menghapus: **Settings → Apps → Installed apps → PenaDF**.
 
 Butuh Windows 10 atau 11, 64-bit, dan ruang sekitar 16 MB. Tanpa akun, tanpa internet.
+
+### Di Mac
+
+1. Unduh [`PenaDF-macOS.dmg`](https://github.com/daefery/penadf/releases/latest/download/PenaDF-macOS.dmg)
+   (untuk Mac Apple Silicon dan Intel, macOS 11 ke atas), buka, lalu seret **PenaDF** ke
+   **Applications**.
+2. Buka PenaDF. macOS akan bilang aplikasi ini tidak bisa diperiksa, karena PenaDF belum
+   dinotarisasi oleh Apple.
+3. Buka **System Settings → Privacy & Security**, gulir ke bawah, klik **Open Anyway** di samping
+   PenaDF, lalu buka lagi dan klik **Open**. Cukup sekali.
+
+Agar PDF langsung terbuka di PenaDF: pilih salah satu PDF di Finder, tekan **⌘I**, pilih PenaDF di
+**Open with**, lalu klik **Change All…**.
 
 ## Yang bisa dilakukan
 

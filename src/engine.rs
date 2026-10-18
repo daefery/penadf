@@ -1,7 +1,8 @@
 //! Binds PDFium once per process and loads documents from bytes.
 //!
 //! PDFium is loaded at run time from `pdfium.dll` (Windows) or `libpdfium.so` (Linux).
-//! Search order: next to the executable, then `PENADF_PDFIUM_DIR`, then the working directory.
+//! Search order: next to the executable, the macOS app bundle's `Frameworks` folder,
+//! `PENADF_PDFIUM_DIR`, then the working directory.
 //!
 //! Threading: PDFium is not thread-safe. `pdfium-render` serialises single calls, but a
 //! sequence of calls (open a document, then read its pages) must not overlap with another
@@ -27,6 +28,8 @@ fn candidate_dirs() -> Vec<PathBuf> {
         .ok()
         .and_then(|p| p.parent().map(PathBuf::from))
     {
+        // PenaDF.app/Contents/MacOS/PenaDF -> PenaDF.app/Contents/Frameworks/libpdfium.dylib
+        dirs.push(dir.join("../Frameworks"));
         dirs.push(dir);
     }
     if let Some(dir) = std::env::var_os("PENADF_PDFIUM_DIR") {

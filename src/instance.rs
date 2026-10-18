@@ -59,9 +59,13 @@ pub fn start(name: &str, files: &[PathBuf], wake: impl Fn() + Send + Sync + 'sta
 
 fn listen(name: &str, wake: Arc<dyn Fn() + Send + Sync>) -> Option<Receiver<Vec<PathBuf>>> {
     let ns = name.to_ns_name::<GenericNamespaced>().ok()?;
+    // On macOS the name is a socket file in /tmp. A crash can leave it behind; since `send`
+    // just failed, nobody is listening on it, so replacing it is safe. (Windows named pipes
+    // vanish with their process, so this has no effect there.)
     let listener = ListenerOptions::new()
         .name(ns)
         .nonblocking(ListenerNonblockingMode::Neither)
+        .try_overwrite(true)
         .create_sync()
         .ok()?;
     let (tx, rx) = channel();
@@ -135,6 +139,23 @@ mod tests {
         assert!(rx.recv_timeout(Duration::from_secs(5)).unwrap().is_empty());
         std::thread::sleep(Duration::from_millis(50));
         assert_eq!(woke.load(Ordering::SeqCst), 2);
+    }
+
+    // macOS only: there the name is a file in /tmp. (Linux uses the abstract namespace,
+    // which leaves nothing behind; Windows named pipes vanish with their process.)
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_stale_socket_file_from_a_crash_does_not_block_the_next_start() {
+        let name = format!("penadf-stale-{}.sock", std::process::id());
+        // A leftover socket file with nobody listening, as a crashed run leaves behind.
+        let path = std::path::Path::new("/tmp").join(&name);
+        drop(std::os::unix::net::UnixListener::bind(&path).unwrap());
+        assert!(path.exists());
+        assert!(matches!(start(&name, &[], || {}), Launch::Primary(_)));
+        assert!(
+            matches!(start(&name, &[], || {}), Launch::Forwarded),
+            "the new primary listens"
+        );
     }
 
     #[test]

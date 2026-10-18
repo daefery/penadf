@@ -30,6 +30,26 @@ fn main() -> eframe::Result {
             penadf::instance::Launch::Forwarded => return Ok(()),
             penadf::instance::Launch::Primary(rx) => rx,
         };
+    // macOS sends Finder double-clicks as "open" events instead of arguments; merge them into
+    // the same channel so they open as tabs.
+    #[cfg(target_os = "macos")]
+    let incoming = {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let wake_slot = ctx_slot.clone();
+        penadf::macos::forward_open_events(tx.clone(), move || {
+            if let Some(ctx) = wake_slot.get() {
+                ctx.request_repaint();
+            }
+        });
+        std::thread::spawn(move || {
+            for paths in incoming {
+                if tx.send(paths).is_err() {
+                    break;
+                }
+            }
+        });
+        rx
+    };
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

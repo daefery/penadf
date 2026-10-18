@@ -3,18 +3,19 @@
 </p>
 
 <p align="center">
-  <b>A small, offline PDF app for Windows.</b> Open, sign, comment on, fill, organize, compare and protect PDFs on your own PC.<br>
+  <b>A small, offline PDF app for Windows and macOS.</b> Open, sign, comment on, fill, organize, compare and protect PDFs on your own PC.<br>
   Free and open source · no account · nothing uploaded.
 </p>
 
 <p align="center">
   <a href="https://github.com/daefery/penadf/releases/latest/download/PenaDF-Setup.exe"><img alt="Download the installer" src="https://img.shields.io/badge/Download-Installer%20.exe-C41E3A?style=for-the-badge&logo=windows&logoColor=white&labelColor=C41E3A&color=1E2230"></a>
-  <a href="https://github.com/daefery/penadf/releases/latest/download/PenaDF-windows-x64.zip"><img alt="Download the portable zip" src="https://img.shields.io/badge/Download-Portable%20.zip-1E2230?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="https://github.com/daefery/penadf/releases/latest/download/PenaDF-macOS.dmg"><img alt="Download for macOS" src="https://img.shields.io/badge/Download-macOS%20.dmg-1E2230?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/daefery/penadf/releases/latest/download/PenaDF-windows-x64.zip"><img alt="Download the portable zip" src="https://img.shields.io/badge/Windows-Portable%20.zip-1E2230?style=for-the-badge&logo=windows&logoColor=white"></a>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-1E2230"></a>
-  <img alt="Platform: Windows 10/11" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-1E2230">
+  <img alt="Platform: Windows 10/11 and macOS 11+" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20%C2%B7%20macOS%2011%2B-1E2230">
   <img alt="Rust + PDFium" src="https://img.shields.io/badge/Rust-PDFium-1E2230">
   <img alt="Works offline" src="https://img.shields.io/badge/works-100%25%20offline-C41E3A?labelColor=1E2230">
 </p>
@@ -81,13 +82,22 @@ The installer shows Indonesian on Indonesian Windows and English everywhere else
 | | File | |
 |---|---|---|
 | **Recommended** | [**PenaDF-Setup.exe**](https://github.com/daefery/penadf/releases/latest/download/PenaDF-Setup.exe) | Installs for your account (no admin rights), adds a Start menu entry and lets you make PenaDF your default PDF app. |
-| Portable | [**PenaDF-windows-x64.zip**](https://github.com/daefery/penadf/releases/latest/download/PenaDF-windows-x64.zip) | Unzip anywhere and run `PenaDF.exe` (keep `pdfium.dll` next to it). Cannot be chosen as the default PDF app. |
+| Windows, portable | [**PenaDF-windows-x64.zip**](https://github.com/daefery/penadf/releases/latest/download/PenaDF-windows-x64.zip) | Unzip anywhere and run `PenaDF.exe` (keep `pdfium.dll` next to it). Cannot be chosen as the default PDF app. |
+| **macOS** | [**PenaDF-macOS.dmg**](https://github.com/daefery/penadf/releases/latest/download/PenaDF-macOS.dmg) | Universal: Apple Silicon and Intel Macs, macOS 11 or later. Open it and drag PenaDF onto Applications. |
 
 Both links always point to the [latest release](https://github.com/daefery/penadf/releases/latest); checksums are in [`SHA256SUMS.txt`](https://github.com/daefery/penadf/releases/latest/download/SHA256SUMS.txt).
 
-**Requirements:** Windows 10 or 11, 64-bit. About 16 MB of disk.
+**Requirements:** Windows 10 or 11 (64-bit), or macOS 11 Big Sur or later. About 16 MB of disk on Windows.
 
 If Windows shows "Windows protected your PC", choose **More info → Run anyway**: the installer is not code-signed yet. IT staff: `PenaDF-Setup.exe /S` installs silently; `/LANG=id` or `/LANG=en` picks the language.
+
+### On a Mac
+
+1. Open `PenaDF-macOS.dmg` and drag **PenaDF** onto **Applications**.
+2. Open PenaDF. macOS says it cannot check the app, because PenaDF is not notarized by Apple yet.
+3. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to PenaDF, then open it again and click **Open**. Only the first time.
+
+To open PDFs with PenaDF on double-click: select any PDF in Finder, press **⌘I**, choose PenaDF under **Open with**, then **Change All…**. On a Mac, ⌘ replaces Ctrl in every shortcut below, and printing opens the document in Preview's print dialog.
 
 ## Size and speed
 
@@ -128,14 +138,15 @@ One Rust crate. Everything except the window lives in the library and is tested 
 | `src/geometry.rs` | Screen ↔ PDF coordinates for rotated and cropped pages |
 | `src/gui/` | Page view, open-document state with undo, tab strip and tab bar, theme |
 | `src/instance.rs` | One window per user: later launches hand their files over as tabs (local socket) |
-| `src/winshell.rs` | Default-app check and the Settings deep link |
+| `src/winshell.rs` | Windows default-app check and the Settings deep link |
+| `src/macos.rs` | macOS: receives PDFs opened from Finder and hands them to the window as tabs |
 | `src/ui/` | The window: menus, tool bar, panels, dialogs |
 | `installer/` | NSIS installer script, agreement texts, side image |
 | `tests/` | End-to-end tests on real PDFs, plus simulated mouse input on the page view and tab bar |
 
 ## Build from source
 
-PenaDF builds for Windows from Linux or WSL, with no Visual Studio:
+PenaDF builds for Windows from Linux or WSL, with no Visual Studio; the macOS app is built on a Mac (or the GitHub Actions macOS runner) with `scripts/build-macos.sh`:
 
 ```bash
 rustup target add x86_64-pc-windows-gnullvm
@@ -146,7 +157,7 @@ scripts/build-installer.sh          # dist/PenaDF-Setup-<version>.exe and dist/P
 python3 docs/visuals/render.py      # regenerate the README visuals
 ```
 
-On Windows with the MSVC toolchain, `cargo build --release` works too; copy `vendor/pdfium/windows/pdfium.dll` next to the `.exe`. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) tests on Linux and Windows on every push, and builds the installer and zip for tagged releases.
+On Windows with the MSVC toolchain, `cargo build --release` works too; copy `vendor/pdfium/windows/pdfium.dll` next to the `.exe`. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) tests on Linux, Windows and macOS on every push, and builds the installer, the zip and the `.dmg` for tagged releases.
 
 ## Brand
 

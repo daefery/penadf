@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- PenaDF.app. @VERSION@ is filled in by scripts/build-macos.sh. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>                <string>PenaDF</string>
+  <key>CFBundleDisplayName</key>         <string>PenaDF</string>
+  <key>CFBundleIdentifier</key>          <string>io.github.daefery.penadf</string>
+  <key>CFBundleExecutable</key>          <string>PenaDF</string>
+  <key>CFBundleIconFile</key>            <string>PenaDF</string>
+  <key>CFBundlePackageType</key>         <string>APPL</string>
+  <key>CFBundleShortVersionString</key>  <string>@VERSION@</string>
+  <key>CFBundleVersion</key>             <string>@VERSION@</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleDevelopmentRegion</key>   <string>en</string>
+  <key>CFBundleLocalizations</key>       <array><string>en</string><string>id</string></array>
+  <key>LSMinimumSystemVersion</key>      <string>11.0</string>
+  <key>LSApplicationCategoryType</key>   <string>public.app-category.productivity</string>
+  <key>NSHighResolutionCapable</key>     <true/>
+  <key>NSHumanReadableCopyright</key>    <string>Apache License 2.0</string>
+
+  <!-- PenaDF can open PDFs: it appears in Finder's "Open With" and can be chosen as the
+       default with Get Info > Open with > Change All. LSHandlerRank Alternate: listed as an
+       option, never taking over the default by itself. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>        <string>PDF Document</string>
+      <key>CFBundleTypeRole</key>        <string>Editor</string>
+      <key>LSHandlerRank</key>           <string>Alternate</string>
+      <key>LSItemContentTypes</key>      <array><string>com.adobe.pdf</string></array>
+      <key>CFBundleTypeIconFile</key>    <string>PenaDF</string>
+    </dict>
+  </array>
+</dict>
+</plist>

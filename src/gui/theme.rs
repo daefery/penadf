@@ -9,13 +9,23 @@ pub const MUTED: Color32 = Color32::from_rgb(96, 102, 112);
 pub const ADDED: Color32 = Color32::from_rgb(220, 245, 226);
 pub const REMOVED: Color32 = Color32::from_rgb(253, 226, 226);
 
-/// Uses Windows' own UI font (Segoe UI) when present, keeping egui's bundled fonts as fallback
-/// for symbols. Read from disk at start-up, so it adds nothing to the .exe size.
-fn use_system_font(ctx: &egui::Context) {
+/// The system's own UI font file: Segoe UI on Windows, Helvetica Neue on macOS.
+fn system_font() -> Option<Vec<u8>> {
     let windir = std::env::var_os("WINDIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| "C:\\Windows".into());
-    let Ok(bytes) = std::fs::read(windir.join("Fonts").join("segoeui.ttf")) else {
+    let candidates = [
+        windir.join("Fonts").join("segoeui.ttf"),
+        // macOS: a single-face TrueType file that egui can read (SF Pro ships as a collection).
+        "/System/Library/Fonts/Supplemental/Arial.ttf".into(),
+    ];
+    candidates.iter().find_map(|p| std::fs::read(p).ok())
+}
+
+/// Uses the system's UI font when present, keeping egui's bundled fonts as fallback for
+/// symbols. Read from disk at start-up, so it adds nothing to the app size.
+fn use_system_font(ctx: &egui::Context) {
+    let Some(bytes) = system_font() else {
         return;
     };
     let mut fonts = egui::FontDefinitions::default();

@@ -203,6 +203,7 @@ pub fn find_office_converter() -> Option<OfficeConverter> {
             "/usr/bin/soffice",
             "/usr/bin/libreoffice",
             "/usr/local/bin/soffice",
+            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
         ]
         .map(PathBuf::from),
     );

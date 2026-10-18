@@ -26,10 +26,36 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: scripts/test.sh
 
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: Test against macOS PDFium
+        run: |
+          mkdir -p /tmp/pdfium
+          curl -sSL https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7881/pdfium-mac-univ.tgz | tar xz -C /tmp/pdfium
+          PENADF_PDFIUM_DIR=/tmp/pdfium/lib cargo test --release
+      - name: Third-party notices tool
+        run: cargo install cargo-about --locked --features cli
+      - name: Build PenaDF.app and the .dmg
+        run: scripts/build-macos.sh
+      - name: Smoke test the bundle (starts, finds PDFium, stays up)
+        run: |
+          APP=dist/PenaDF.app/Contents/MacOS/PenaDF
+          "$APP" & PID=$!
+          sleep 8
+          if kill -0 $PID 2>/dev/null; then echo "PenaDF is running"; kill $PID; else echo "PenaDF exited early"; exit 1; fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: penadf-macos
+          path: dist/PenaDF-macOS.dmg
+
   windows:
     runs-on: windows-latest
-    permissions:
-      contents: write # only used to create the draft release on tags
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -71,22 +97,34 @@ jobs:
           # Fixed names so README links to releases/latest/download/... keep working.
           Copy-Item "dist\PenaDF-Setup-$version.exe" dist\release\PenaDF-Setup.exe
           Copy-Item dist\PenaDF-windows-x64.zip dist\release\
-          Get-ChildItem dist\release -File | ForEach-Object {
-            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
-          } | Set-Content -Encoding ascii dist\release\SHA256SUMS.txt
-          Get-Content dist\release\SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
           name: penadf-windows
           path: dist/release/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dl
+      - name: Files and checksums
+        run: |
+          mkdir -p release
+          cp dl/penadf-windows/PenaDF-Setup.exe dl/penadf-windows/PenaDF-windows-x64.zip release/
+          cp dl/penadf-macos/PenaDF-macOS.dmg release/
+          (cd release && sha256sum PenaDF-Setup.exe PenaDF-windows-x64.zip PenaDF-macOS.dmg > SHA256SUMS.txt && cat SHA256SUMS.txt)
       - name: Draft release (only if the tag has no release yet)
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "Release $GITHUB_REF_NAME already exists; leaving it as it is."
           else
-            gh release create "$GITHUB_REF_NAME" --draft --title "PenaDF ${GITHUB_REF_NAME#v}" --notes-file packaging/release-notes.md dist/release/*
+            gh release create "$GITHUB_REF_NAME" --draft --title "PenaDF ${GITHUB_REF_NAME#v}" --notes-file packaging/release-notes.md release/*
           fi
