@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="brand.css">
+<style>
+body{width:1600px;height:600px;padding:64px 72px}
+h2{font-size:40px;letter-spacing:-1.4px;font-weight:800;margin-top:10px}
+.lede{font-size:19px;color:var(--muted);margin-top:10px}
+.lanes{display:grid;grid-template-columns:1fr 46px 1fr 46px 1fr 46px 1fr;align-items:stretch;margin-top:44px}
+.step{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px 26px 24px;display:flex;flex-direction:column;gap:14px;position:relative}
+.step.first{background:var(--ink);border-color:var(--ink);color:#F3F4F7}
+.step.first .k{color:#B9BECB}
+.step.done{background:var(--red);border-color:var(--red);color:#fff}
+.step.done .k{color:#FFE3E8}
+.num{font-family:"DM Mono",monospace;font-size:14px;opacity:.65}
+.step h3{font-size:25px;letter-spacing:-.6px}
+.k{font-size:15.5px;line-height:1.55;color:var(--muted)}
+.pill{display:inline-flex;font-family:"DM Mono",monospace;font-size:13px;padding:5px 10px;border-radius:8px;background:var(--sage);width:fit-content}
+.first .pill{background:rgba(255,255,255,.1);color:#E4E6EC}
+.done .pill{background:rgba(255,255,255,.18)}
+.arrow{display:flex;align-items:center;justify-content:center}
+.arrow svg{width:30px;height:30px}
+.time{margin-top:auto;font-family:"DM Mono",monospace;font-size:14px;display:flex;justify-content:space-between;border-top:1px dashed var(--line);padding-top:12px}
+.first .time{border-top-color:#3A4052}
+.done .time{border-top-color:rgba(255,255,255,.3)}
+.tabs{display:flex;gap:4px}
+.tabs span{font-size:12.5px;padding:5px 9px;border-radius:7px 7px 0 0;background:var(--sage)}
+.tabs span.on{background:#fff;border:1px solid var(--line);border-bottom:none;font-weight:700}
+.sig{height:46px}
+</style></head>
+<body>
+<div class="eyebrow">How it works</div>
+<h2>Double-click a PDF. Do the job. Save.</h2>
+<p class="lede">Every PDF opens as a tab in the same window. Changes stay in memory with undo until you save.</p>
+<div class="lanes">
+  <div class="step first">
+    <div class="num">01</div><h3>Install once</h3>
+    <p class="k">A four-step installer, no admin rights. Tick one box to make PenaDF your default PDF app.</p>
+    <span class="pill">Indonesian or English</span>
+    <div class="time"><span>Setup</span><span>~16 MB</span></div>
+  </div>
+  <div class="arrow"><svg viewBox="0 0 24 24"><path d="M5 12h13m-5-6 6 6-6 6" fill="none" stroke="#C41E3A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="step">
+    <div class="num">02</div><h3>Open in tabs</h3>
+    <p class="k">Double-click PDFs in Explorer. Each one opens as a new tab in the window that is already open.</p>
+    <div class="tabs"><span class="on">Perjanjian.pdf</span><span>Invoice.pdf</span><span>Cuti.pdf</span></div>
+    <div class="time"><span>Ctrl+Tab</span><span>switch</span></div>
+  </div>
+  <div class="arrow"><svg viewBox="0 0 24 24"><path d="M5 12h13m-5-6 6 6-6 6" fill="none" stroke="#C41E3A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="step">
+    <div class="num">03</div><h3>Do the job</h3>
+    <p class="k">Sign, highlight, add a note, fill a form, reorder pages, compare versions or set a password.</p>
+    <svg class="sig" viewBox="0 0 260 60"><path d="M10 48 C20 10 40 6 44 30 S60 50 70 28 S90 10 100 34 S120 44 130 26 S150 14 160 34 L240 30" fill="none" stroke="#1E2230" stroke-width="4" stroke-linecap="round"/><path d="M10 56 H250" stroke="#C41E3A" stroke-width="2" stroke-dasharray="4 5"/></svg>
+    <div class="time"><span>Ctrl+Z</span><span>undo anything</span></div>
+  </div>
+  <div class="arrow"><svg viewBox="0 0 24 24"><path d="M5 12h13m-5-6 6 6-6 6" fill="none" stroke="#C41E3A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="step done">
+    <div class="num">04</div><h3>Save and send</h3>
+    <p class="k">Save as a normal PDF that opens anywhere, or export pages as images, text or a web page.</p>
+    <span class="pill">PDF · PNG · JPG · TXT · HTML</span>
+    <div class="time"><span>Ctrl+S</span><span>saved safely</span></div>
+  </div>
+</div>
+</body></html>

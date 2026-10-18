@@ -1,0 +1,15 @@
+/* Shared styles for the README visuals. Palette from the app (src/gui/theme.rs) and icon. */
+@font-face{font-family:"Plus Jakarta Sans";src:url(../fonts/PlusJakartaSans.woff2) format("woff2");font-weight:200 800}
+@font-face{font-family:"DM Mono";src:url(../fonts/DMMono-400.woff2) format("woff2");font-weight:400}
+:root{--ink:#1E2230;--night:#151925;--red:#C41E3A;--red-soft:#FDECEF;--paper:#F6F5F1;--sage:#ECEBE6;--muted:#5F6573;--line:#E2E0DA;--edge:#8A8F9C;--ok:#16803D}
+*{box-sizing:border-box;margin:0}
+html,body{width:100%;height:100%}
+body{font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased}
+.mono{font-family:"DM Mono",ui-monospace,monospace}
+.eyebrow{font-size:13px;letter-spacing:.16em;font-weight:700;color:var(--muted);text-transform:uppercase}
+.mark{display:inline-block;flex:none}
+.shot{display:block;border-radius:14px;box-shadow:0 1px 0 rgba(30,34,48,.04),0 24px 60px -18px rgba(30,34,48,.35),0 0 0 1px rgba(30,34,48,.08);background:#fff}
+.window{border-radius:14px;overflow:hidden;box-shadow:0 30px 80px -24px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06);background:#fff}
+.window .bar{height:34px;background:#232838;display:flex;align-items:center;gap:8px;padding:0 14px;color:#D3D6DE;font-size:13px;font-weight:600}
+.window .bar img{width:16px;height:16px}
+.window img.body{display:block;width:100%}

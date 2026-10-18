@@ -1,0 +1,92 @@
+# Builds and tests on real Windows for every push and pull request.
+# Pushing a tag like v0.2.0 also builds the installer and the zip and attaches them
+# to a draft GitHub release (published by hand after a check).
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libgl1-mesa-dev
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: scripts/test.sh
+
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write # only used to create the draft release on tags
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test against the bundled pdfium.dll
+        shell: pwsh
+        run: |
+          $env:PENADF_PDFIUM_DIR = "$PWD\vendor\pdfium\windows"
+          cargo test --release
+      - name: Build
+        run: cargo build --release
+      - name: Third-party notices
+        shell: bash
+        run: |
+          cargo install cargo-about --locked --features cli
+          scripts/make_notices.sh
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $out = "dist\PenaDF"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item target\release\penadf.exe "$out\PenaDF.exe"
+          Copy-Item vendor\pdfium\windows\pdfium.dll $out
+          Copy-Item THIRD-PARTY-NOTICES.txt $out
+          Copy-Item LICENSE "$out\LICENSE.txt"
+          Copy-Item README.md "$out\README.txt"
+          Compress-Archive -Path $out -DestinationPath dist\PenaDF-windows-x64.zip -Force
+      - name: Build installer
+        shell: pwsh
+        run: |
+          winget install --id NSIS.NSIS --version 3.13 --silent --accept-source-agreements --accept-package-agreements --disable-interactivity
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -V2 "-DVERSION=$version" "-DDIST=$PWD\dist\PenaDF" "-DOUTFILE=$PWD\dist\PenaDF-Setup-$version.exe" installer\penadf.nsi
+      - name: Release files and checksums
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          New-Item -ItemType Directory -Force dist\release | Out-Null
+          # Fixed names so README links to releases/latest/download/... keep working.
+          Copy-Item "dist\PenaDF-Setup-$version.exe" dist\release\PenaDF-Setup.exe
+          Copy-Item dist\PenaDF-windows-x64.zip dist\release\
+          Get-ChildItem dist\release -File | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Set-Content -Encoding ascii dist\release\SHA256SUMS.txt
+          Get-Content dist\release\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: penadf-windows
+          path: dist/release/*
+      - name: Draft release (only if the tag has no release yet)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; leaving it as it is."
+          else
+            gh release create "$GITHUB_REF_NAME" --draft --title "PenaDF ${GITHUB_REF_NAME#v}" --notes-file packaging/release-notes.md dist/release/*
+          fi

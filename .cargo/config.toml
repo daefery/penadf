@@ -1,0 +1,12 @@
+# Cross-compiling the Windows build from Linux/WSL uses llvm-mingw
+# (https://github.com/mstorsjo/llvm-mingw). scripts/build-windows.sh points
+# CC/linker at it, so nothing here is machine-specific.
+[target.x86_64-pc-windows-gnullvm]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# PDFium is not thread-safe: pdfium-render locks each call, but a sequence of calls
+# (open, then read pages) from two threads can interleave. The app only touches PDFium
+# from the UI thread; the test harness would run tests on parallel threads, so run them
+# one at a time. (Seen as random "could not open PDF" failures on Windows.)
+[env]
+RUST_TEST_THREADS = "1"

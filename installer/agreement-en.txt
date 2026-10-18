@@ -1,0 +1,29 @@
+PenaDF: licence and privacy
+Please read this before installing.
+
+1. FREE AND OPEN SOURCE
+PenaDF is free. You may use it at home and at work, on as many PCs as you like, and copy and share it. Its source code is published under the Apache License 2.0. The full licence is in LICENSE.txt in the installation folder.
+
+2. YOUR FILES STAY ON THIS PC
+PenaDF works without the internet. It has no account, no ads, no tracking and no automatic update check. Your documents are opened, changed and saved on this PC only.
+
+PenaDF stores two things in %APPDATA%\PenaDF:
+- your signature, only if you choose "Save this signature";
+- your choice to hide the "make PenaDF the default" reminder.
+Delete that folder to remove them.
+
+Printing hands the file to the Windows print command. "Create PDF from Office files" asks Microsoft Office or LibreOffice, if installed, to convert the file. Neither sends anything over the network.
+
+3. WHAT THE INSTALLER CHANGES
+It copies PenaDF to the folder you choose, adds a Start menu shortcut, and registers PenaDF with Windows so it appears in "Open with" and in Settings > Default apps. It does not change your default PDF app; you choose that yourself in Settings. Uninstall from Settings > Apps removes all of this. Your saved signature is kept until you delete it.
+
+4. SIGNATURES
+The Sign tool places a picture of your signature on the page. It is not a certified electronic signature (PSrE) and does not by itself prove who signed.
+
+5. NO WARRANTY
+PenaDF is provided "as is", without warranty of any kind, as set out in sections 7 and 8 of the Apache License 2.0. Keep a copy of important documents before you change them.
+
+6. OTHER SOFTWARE INSIDE
+PenaDF includes open-source components, including PDFium by Google. Their licences are listed in THIRD-PARTY-NOTICES.txt in the installation folder.
+
+Click "I Agree" to continue. 

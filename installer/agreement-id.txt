@@ -1,0 +1,29 @@
+PenaDF: lisensi dan privasi
+Mohon dibaca sebelum memasang.
+
+1. GRATIS DAN OPEN SOURCE
+PenaDF gratis. Anda boleh memakainya di rumah dan di kantor, di PC sebanyak apa pun, serta menyalin dan membagikannya. Kode sumbernya terbuka dengan lisensi Apache License 2.0. Teks lengkap lisensi ada di file LICENSE.txt di folder instalasi.
+
+2. FILE ANDA TETAP DI PC INI
+PenaDF bekerja tanpa internet. Tidak ada akun, iklan, pelacakan, atau pemeriksaan pembaruan otomatis. Dokumen Anda hanya dibuka, diubah, dan disimpan di PC ini.
+
+PenaDF menyimpan dua hal di %APPDATA%\PenaDF:
+- tanda tangan Anda, hanya jika Anda memilih "Save this signature";
+- pilihan Anda untuk menyembunyikan pengingat "jadikan PenaDF aplikasi utama".
+Hapus folder tersebut untuk menghilangkannya.
+
+Mencetak berarti menyerahkan file ke perintah cetak Windows. "Create PDF from Office files" meminta Microsoft Office atau LibreOffice, jika terpasang, untuk mengubah file. Keduanya tidak mengirim apa pun lewat internet.
+
+3. YANG DIUBAH OLEH PEMASANG
+Pemasang menyalin PenaDF ke folder yang Anda pilih, menambahkan pintasan di menu Start, dan mendaftarkan PenaDF ke Windows agar muncul di "Open with" dan di Settings > Default apps. Pemasang tidak mengganti aplikasi PDF utama Anda; itu Anda pilih sendiri di Settings. Menghapus lewat Settings > Apps membatalkan semua ini. Tanda tangan yang tersimpan tetap ada sampai Anda menghapusnya.
+
+4. TANDA TANGAN
+Alat Sign menempelkan gambar tanda tangan Anda di halaman. Ini bukan tanda tangan elektronik tersertifikasi (PSrE) dan tidak dengan sendirinya membuktikan siapa yang menandatangani.
+
+5. TANPA JAMINAN
+PenaDF diberikan "apa adanya", tanpa jaminan apa pun, sesuai bagian 7 dan 8 Apache License 2.0. Simpan salinan dokumen penting sebelum Anda mengubahnya.
+
+6. PERANGKAT LUNAK LAIN DI DALAMNYA
+PenaDF memuat komponen open source, termasuk PDFium dari Google. Lisensinya tercantum di file THIRD-PARTY-NOTICES.txt di folder instalasi.
+
+Klik "Saya Setuju" untuk melanjutkan. 

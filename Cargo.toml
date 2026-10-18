@@ -1,0 +1,55 @@
+[package]
+name = "penadf"
+version = "0.2.0"
+edition = "2024"
+description = "Lightweight offline PDF tool for Windows: view, create, organize, sign, comment, fill forms, compare and protect PDFs."
+license = "Apache-2.0"
+repository = "https://github.com/daefery/penadf"
+readme = "README.md"
+
+[lib]
+name = "penadf"
+path = "src/lib.rs"
+
+[[bin]]
+name = "penadf"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "clipboard"] }
+getrandom = "0.4"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp", "tiff"] }
+interprocess = "2.4"
+lopdf = "0.45"
+pdfium-render = "0.9.4"
+rfd = "0.17"
+similar = "3.2"
+
+# Linux is only used for development and tests (WSLg); Windows is the shipping target.
+[target.'cfg(target_os = "linux")'.dependencies]
+eframe = { version = "0.37", default-features = false, features = ["x11", "wayland"] }
+
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
+[features]
+# Dev only (README screenshots): EFRAME_SCREENSHOT_TO=<file.png> saves the first frames and
+# exits; PENADF_SHOW picks the view. Off in normal and release builds.
+screenshot = ["eframe/__screenshot"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[dev-dependencies]
+egui_kittest = "0.37"
+
+# The build script runs on the build machine, so this cannot be limited to Windows hosts;
+# build.rs only uses it when the *target* is Windows.
+[build-dependencies]
+winresource = "0.1"
