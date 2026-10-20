@@ -10,6 +10,10 @@ Checksums: `SHA256SUMS.txt`.
 
 The installer is not code-signed yet, so Windows may show "Windows protected your PC". Choose **More info → Run anyway**.
 
+### New in 0.3.1
+
+- Select and copy text: drag over text to select it (double-click for one word, Ctrl+A for the whole page), then copy with Ctrl+C (⌘C on Mac), Edit → Copy or the right-click menu. Password-protected PDFs that forbid copying say so instead.
+
 ### In this version
 
 - View PDFs in tabs; double-clicking more PDFs adds tabs to the open window.
