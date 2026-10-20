@@ -47,7 +47,7 @@
 | **Compare** | Line-by-line text changes between two versions, with page numbers. |
 | **Protect** | Open password and/or permissions (print, copy, edit, comment), AES-256. Remove protection with the permissions password. |
 | **Export** | Pages to PNG/JPEG, text to `.txt`, PDF to `.html`. |
-| **Read** | Tabs, fast rendering, zoom, find, print, undo/redo, password-protected files. |
+| **Read and copy** | Tabs, fast rendering, zoom, find; select text with the mouse (double-click for a word, Ctrl+A for the page) and copy it with Ctrl+C or the right-click menu; print, undo/redo, password-protected files. |
 
 **Not included:** editing existing text in place, PDF to Word, OCR for scans, cloud features and sending documents to others for signature. The Sign tool places a picture of your signature; it is not a certified electronic signature (PSrE).
 
@@ -66,6 +66,8 @@
 | **Compare.** The changed price clause between two versions. | **Find.** All matches highlighted; the current one in orange. |
 | ![Organize](docs/assets/screen-organize.png) | ![Protect](docs/assets/screen-protect.png) |
 | **Organize.** Page tools next to the thumbnails. | **Protect.** Password and permissions, AES-256. |
+| ![Select and copy](docs/assets/screen-select.png) | |
+| **Select and copy.** Drag over text, then Ctrl+C. | |
 
 </details>
 
@@ -121,6 +123,8 @@ For comparison, Adobe lists 4.5 GB of disk space for Acrobat on Windows. The fir
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab |
 | Ctrl+S / Ctrl+Shift+S | Save / Save as |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
+| Ctrl+C | Copy selected text |
+| Ctrl+A | Select all text on the page |
 | Ctrl+F | Find |
 | Ctrl+P | Print |
 | Ctrl + / Ctrl − / Ctrl+0 | Zoom in / out / fit width |

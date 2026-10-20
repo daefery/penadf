@@ -3,6 +3,7 @@
 use super::document::Document;
 use super::theme;
 use crate::geometry::PageGeom;
+use crate::ops::text::Selection;
 use crate::ops::{PagePoint, PageRect, SearchHit};
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2};
 
@@ -38,7 +39,9 @@ impl Tool {
 
     pub fn hint(self) -> &'static str {
         match self {
-            Tool::Select => "Scroll to read. Ctrl + mouse wheel zooms.",
+            Tool::Select => {
+                "Drag over text to select it, then Ctrl+C to copy. Ctrl + mouse wheel zooms."
+            }
             Tool::Highlight | Tool::Underline | Tool::StrikeOut => {
                 "Drag across the text you want to mark."
             }
@@ -89,6 +92,12 @@ pub struct Viewer {
     ink_page: Option<usize>,
     ink: Vec<Vec<PagePoint>>,
     pending_fit: Option<Fit>,
+    /// Selected text (Select tool). Cleared when the document changes.
+    pub selection: Option<Selection>,
+    /// Set while a text-selection drag is in progress.
+    selecting: bool,
+    /// "Copy" chosen in the right-click menu; the app reads it with `take_copy_request`.
+    copy_requested: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -108,6 +117,9 @@ impl Default for Viewer {
             ink_page: None,
             ink: Vec::new(),
             pending_fit: Some(Fit::Width),
+            selection: None,
+            selecting: false,
+            copy_requested: false,
         }
     }
 }
@@ -264,7 +276,31 @@ impl Viewer {
                     };
                     response.clone().on_hover_cursor(cursor);
                 }
-                if let Some(a) = self.handle_tool(&response, index, rect, geom, &painter) {
+                if tool == Tool::Select {
+                    self.select_text(&response, index, rect, geom, doc);
+                    // Right-click menu with the usual text actions.
+                    let has_sel = self.selection.is_some();
+                    response.context_menu(|ui| {
+                        if ui.add_enabled(has_sel, egui::Button::new("Copy")).clicked() {
+                            self.copy_requested = true;
+                            ui.close();
+                        }
+                        if ui.button("Select all on this page").clicked() {
+                            self.selection = doc.text_layout(index).select_all(index);
+                            ui.close();
+                        }
+                    });
+                    if let Some(sel) = self.selection.filter(|s| s.page == index) {
+                        let layout = doc.text_layout(index);
+                        for r in layout.highlight(&sel) {
+                            painter.rect_filled(
+                                to_screen(r).expand(0.5),
+                                1.0,
+                                Color32::from_rgba_unmultiplied(29, 78, 216, 70),
+                            );
+                        }
+                    }
+                } else if let Some(a) = self.handle_tool(&response, index, rect, geom, &painter) {
                     action = Some(a);
                 }
                 // Ink drawn so far on this page.
@@ -289,6 +325,95 @@ impl Viewer {
         action
     }
 
+    /// Select tool: press on text and drag to select; double-click selects a word; a click
+    /// on empty space clears the selection. Over text the cursor becomes a text cursor.
+    fn select_text(
+        &mut self,
+        response: &egui::Response,
+        page: usize,
+        rect: Rect,
+        geom: PageGeom,
+        doc: &mut Document,
+    ) {
+        let to_page = |p: Pos2| {
+            let uv = (p - rect.min) / rect.size();
+            geom.to_page(uv.x.clamp(0.0, 1.0), uv.y.clamp(0.0, 1.0))
+        };
+        // Tolerance of a few screen pixels, in page points.
+        let slack = 4.0 / self.zoom.max(0.1);
+        let over_text =
+            |doc: &mut Document, pos: Pos2| doc.text_layout(page).hit(to_page(pos), slack);
+
+        if let Some(pos) = response.hover_pos()
+            && over_text(doc, pos).is_some()
+        {
+            response.ctx.set_cursor_icon(egui::CursorIcon::Text);
+        }
+        if response.double_clicked() {
+            if let Some(pos) = response.interact_pointer_pos()
+                && let Some(i) = over_text(doc, pos)
+            {
+                self.selection = doc.text_layout(page).word_at(page, i);
+            }
+            return;
+        }
+        if response.drag_started() {
+            // egui reports a drag after a few pixels of movement; start where the press was.
+            let origin = response.ctx.input(|i| i.pointer.press_origin());
+            let start = origin.or(response.interact_pointer_pos());
+            match start.and_then(|p| over_text(doc, p)) {
+                Some(i) => {
+                    self.selection = Some(Selection {
+                        page,
+                        anchor: i,
+                        focus: i,
+                    });
+                    self.selecting = true;
+                }
+                None => self.selecting = false,
+            }
+        }
+        if self.selecting
+            && response.dragged()
+            && let (Some(pos), Some(sel)) =
+                (response.interact_pointer_pos(), self.selection.as_mut())
+            && sel.page == page
+            && let Some(i) = doc.text_layout(page).nearest(to_page(pos))
+        {
+            sel.focus = i;
+        }
+        if response.drag_stopped() {
+            self.selecting = false;
+        }
+        if response.clicked() {
+            self.selection = None;
+        }
+    }
+
+    /// Text currently selected, ready for the clipboard.
+    pub fn selected_text(&self, doc: &mut Document) -> Option<String> {
+        let sel = self.selection?;
+        let text = doc.text_layout(sel.page).text(&sel);
+        (!text.is_empty()).then_some(text)
+    }
+
+    /// Selects all text on the page being read.
+    pub fn select_all(&mut self, doc: &mut Document) {
+        self.selection = doc
+            .text_layout(self.current_page)
+            .select_all(self.current_page);
+    }
+
+    /// True once after "Copy" was chosen in the page's right-click menu.
+    pub fn take_copy_request(&mut self) -> bool {
+        std::mem::take(&mut self.copy_requested)
+    }
+
+    /// True while a text selection drag is under way (the page view should not scroll then).
+    pub fn is_selecting(&self) -> bool {
+        self.selecting
+    }
+
     fn handle_tool(
         &mut self,
         response: &egui::Response,
@@ -302,7 +427,7 @@ impl Viewer {
             geom.to_page(uv.x.clamp(0.0, 1.0), uv.y.clamp(0.0, 1.0))
         };
         match self.tool {
-            Tool::Select => None,
+            Tool::Select => None, // handled by select_text
             t if t.drags_box() => {
                 if response.drag_started() {
                     // egui reports a drag only after the pointer has moved a few pixels;

@@ -525,3 +525,56 @@ fn info_reports_page_count_and_encryption() {
         "still protected when opened by the owner"
     );
 }
+
+#[test]
+fn selecting_text_on_a_real_page_copies_exactly_that_text() {
+    use penadf::ops::text::{self, Selection};
+    let pdf = create::from_text("Harga sewa Rp 96.000.000 per tahun.\nDibayar di muka.\n\nPasal 4")
+        .unwrap();
+    let layout = text::layout_of(&pdf, None, 0).unwrap();
+    assert!(!layout.is_empty());
+
+    // Press on the "R" of "Rp", drag to the "u" of "muka": a selection over two lines.
+    let hit = |word: &str| ops::search(&pdf, None, word).unwrap().remove(0).rects[0];
+    let rp = hit("Rp");
+    let muka = hit("muka");
+    let start = layout
+        .hit(
+            PagePoint {
+                x: rp.left + 1.0,
+                y: (rp.bottom + rp.top) / 2.0,
+            },
+            2.0,
+        )
+        .expect("char under the press");
+    let end = layout
+        .nearest(PagePoint {
+            x: muka.right - 1.0,
+            y: (muka.bottom + muka.top) / 2.0,
+        })
+        .unwrap();
+    let sel = Selection {
+        page: 0,
+        anchor: start,
+        focus: end,
+    };
+    assert_eq!(
+        layout.text(&sel),
+        "Rp 96.000.000 per tahun.\nDibayar di muka"
+    );
+    assert_eq!(
+        layout.highlight(&sel).len(),
+        2,
+        "one highlight bar per line"
+    );
+
+    // Double-click a word; Ctrl+A takes the whole page.
+    assert_eq!(layout.text(&layout.word_at(0, start).unwrap()), "Rp");
+    // A PDF has no characters for an empty line, so the blank line between paragraphs
+    // becomes one line break (as when copying from Chrome or Acrobat).
+    let all = layout.text(&layout.select_all(0).unwrap());
+    assert_eq!(
+        all,
+        "Harga sewa Rp 96.000.000 per tahun.\nDibayar di muka.\nPasal 4"
+    );
+}

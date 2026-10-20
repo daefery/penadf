@@ -8,6 +8,7 @@ pub mod forms;
 pub mod markup;
 pub mod pages;
 pub mod protect;
+pub mod text;
 
 use crate::engine;
 use anyhow::Result;

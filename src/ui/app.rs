@@ -315,6 +315,7 @@ impl PenaApp {
             Ok(()) => {
                 self.comments_cache = None;
                 self.hits.clear();
+                self.viewer.selection = None;
                 self.info(what.to_string());
             }
             Err(e) => self.error(format!("{e:#}")),
@@ -630,6 +631,20 @@ impl PenaApp {
         if pressed(K::new(M::COMMAND, Key::F)) {
             self.search_open = true;
         }
+        // Copy and Select all for selected PDF text, unless a text box has the keyboard (then
+        // Ctrl+C / Ctrl+A belong to it). The window sends Ctrl+C as a Copy event, not a key.
+        if !ctx.egui_wants_keyboard_input() {
+            let copy = ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)));
+            if copy {
+                self.copy_selection(ctx);
+            }
+            if pressed(K::new(M::COMMAND, Key::A))
+                && let Some(d) = &mut self.doc
+            {
+                self.viewer.tool = Tool::Select;
+                self.viewer.select_all(d);
+            }
+        }
         if pressed(K::new(M::COMMAND, Key::P)) {
             self.print();
         }
@@ -661,10 +676,26 @@ impl PenaApp {
         }
     }
 
+    /// Puts the selected PDF text on the clipboard.
+    fn copy_selection(&mut self, ctx: &egui::Context) {
+        let allowed = self.doc.as_ref().is_some_and(|d| d.allowed.copy);
+        let Some(d) = &mut self.doc else { return };
+        let Some(text) = self.viewer.selected_text(d) else {
+            return;
+        };
+        if !self.require(allowed, "copying text") {
+            return;
+        }
+        let chars = text.chars().count();
+        ctx.copy_text(text);
+        self.info(format!("Copied {chars} characters"));
+    }
+
     fn undo(&mut self) {
         if let Some(d) = &mut self.doc {
             let r = d.undo();
             self.comments_cache = None;
+            self.viewer.selection = None;
             self.report(r);
         }
     }
@@ -673,6 +704,7 @@ impl PenaApp {
         if let Some(d) = &mut self.doc {
             let r = d.redo();
             self.comments_cache = None;
+            self.viewer.selection = None;
             self.report(r);
         }
     }
@@ -765,6 +797,24 @@ impl PenaApp {
                         self.redo();
                     }
                     ui.separator();
+                    let has_sel = self.viewer.selection.is_some();
+                    if ui
+                        .add_enabled(has_sel, egui::Button::new("Copy  (Ctrl+C)"))
+                        .clicked()
+                    {
+                        self.copy_selection(ui.ctx());
+                    }
+                    if ui
+                        .add_enabled(
+                            self.doc.is_some(),
+                            egui::Button::new("Select all on this page  (Ctrl+A)"),
+                        )
+                        .clicked()
+                        && let Some(d) = &mut self.doc
+                    {
+                        self.viewer.tool = Tool::Select;
+                        self.viewer.select_all(d);
+                    }
                     if ui
                         .add_enabled(self.doc.is_some(), egui::Button::new("Find…  (Ctrl+F)"))
                         .clicked()
@@ -1961,6 +2011,38 @@ impl PenaApp {
                         self.viewer.tool = t;
                     }
                 }
+                // Selects text from the first match of the first word to the first match of
+                // the second, e.g. select:Harga|muka
+                "select" => {
+                    if let (Some((from, to)), Some(d)) = (val.split_once('|'), &mut self.doc) {
+                        let layout = d.text_layout(0);
+                        let all = layout
+                            .select_all(0)
+                            .map(|s| layout.text(&s))
+                            .unwrap_or_default();
+                        let chars: Vec<char> = all.chars().collect();
+                        let find = |w: &str| {
+                            let w: Vec<char> = w.chars().collect();
+                            chars.windows(w.len()).position(|c| c == w.as_slice())
+                        };
+                        // Map positions in the copied text back to glyph indices.
+                        let text_index: Vec<usize> = layout
+                            .glyphs
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, g)| g.ch != '\r')
+                            .map(|(i, _)| i)
+                            .collect();
+                        if let (Some(a), Some(b)) = (find(from), find(to)) {
+                            let end = b + to.chars().count() - 1;
+                            self.viewer.selection = Some(penadf::ops::text::Selection {
+                                page: 0,
+                                anchor: text_index[a],
+                                focus: text_index[end],
+                            });
+                        }
+                    }
+                }
                 "search" => {
                     self.search_open = true;
                     self.search = val.to_string();
@@ -2044,6 +2126,9 @@ impl eframe::App for PenaApp {
                 });
             }
         });
+        if self.viewer.take_copy_request() {
+            self.copy_selection(&ctx);
+        }
         if open_clicked {
             self.open_dialog();
         }

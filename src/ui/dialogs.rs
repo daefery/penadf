@@ -629,6 +629,8 @@ pub fn shortcuts(ctx: &egui::Context, open: &mut bool) {
                     ("Ctrl+S", "Save"),
                     ("Ctrl+Shift+S", "Save as"),
                     ("Ctrl+Z / Ctrl+Y", "Undo / Redo"),
+                    ("Ctrl+C", "Copy selected text"),
+                    ("Ctrl+A", "Select all text on the page"),
                     ("Ctrl+F", "Find"),
                     ("Ctrl+P", "Print"),
                     ("Ctrl + / Ctrl −", "Zoom in / out"),

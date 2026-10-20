@@ -30,6 +30,8 @@ pub struct Document {
     /// (page, zoom-bucket) -> texture. Cleared on every change.
     textures: HashMap<(usize, u32), egui::TextureHandle>,
     thumbs: HashMap<usize, egui::TextureHandle>,
+    /// Character layout per page, read on first use for text selection.
+    text_layouts: HashMap<usize, std::rc::Rc<crate::ops::text::TextLayout>>,
 }
 
 impl Document {
@@ -53,6 +55,7 @@ impl Document {
             redo: Vec::new(),
             textures: HashMap::new(),
             thumbs: HashMap::new(),
+            text_layouts: HashMap::new(),
         };
         doc.refresh()?;
         Ok(doc)
@@ -75,6 +78,7 @@ impl Document {
         self.info = ops::info(&self.bytes, self.pw())?;
         self.textures.clear();
         self.thumbs.clear();
+        self.text_layouts.clear();
         Ok(())
     }
 
@@ -146,6 +150,21 @@ impl Document {
         let tex = self.render(ctx, page, bucket as f32 / 10.0 * 72.0, "page")?;
         self.textures.insert((page, bucket), tex.clone());
         Some(tex)
+    }
+
+    /// The selectable text of `page` (cached until the document changes).
+    pub fn text_layout(&mut self, page: usize) -> std::rc::Rc<crate::ops::text::TextLayout> {
+        if let Some(l) = self.text_layouts.get(&page) {
+            return l.clone();
+        }
+        let layout = self
+            .live
+            .as_ref()
+            .and_then(|doc| crate::ops::text::layout(doc, page).ok())
+            .unwrap_or_default();
+        let layout = std::rc::Rc::new(layout);
+        self.text_layouts.insert(page, layout.clone());
+        layout
     }
 
     pub fn thumb_texture(
