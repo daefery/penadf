@@ -662,6 +662,15 @@ fn signed_sample() -> Vec<u8> {
         "Contents" => Object::String(vec![0u8; 16], lopdf::StringFormat::Hexadecimal),
     });
     let page_id = *doc.get_pages().get(&1).unwrap();
+    // A blue square, like the e-Meterai's picture.
+    let appearance = doc.add_object(lopdf::Stream::new(
+        dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Form",
+            "BBox" => vec![0.into(), 0.into(), 100.into(), 100.into()],
+        },
+        b"0 0 1 rg 0 0 100 100 re f".to_vec(),
+    ));
     let field = doc.add_object(dictionary! {
         "Type" => "Annot",
         "Subtype" => "Widget",
@@ -671,6 +680,7 @@ fn signed_sample() -> Vec<u8> {
         "Rect" => vec![100.into(), 100.into(), 200.into(), 200.into()],
         "P" => page_id,
         "F" => 4,
+        "AP" => dictionary! { "N" => appearance },
     });
     doc.get_object_mut(page_id)
         .unwrap()
@@ -709,4 +719,18 @@ fn editing_a_signed_pdf_appends_and_keeps_the_signed_bytes() {
         .collect();
     use pdfium_render::prelude::PdfPageAnnotationType as T;
     assert_eq!(kinds, vec![T::Widget, T::Stamp]);
+
+    // On screen the image is in front of the field, and the field shows around it.
+    let img = export::render_page(&doc, 0, 72.0).unwrap();
+    let h = img.height();
+    let under_image = img.get_pixel(190, h - 145); // inside both
+    let field_only = img.get_pixel(110, h - 110); // field, outside the image
+    assert!(
+        under_image[0] > 150 && under_image[2] < 100,
+        "image not in front: {under_image:?}"
+    );
+    assert!(
+        field_only[2] > 150 && field_only[0] < 100,
+        "field not drawn: {field_only:?}"
+    );
 }

@@ -22,13 +22,72 @@ impl ImageFormat {
 
 /// Renders one page to RGBA at `dpi`. Also used by the viewer.
 pub fn render_page(doc: &PdfDocument, page: usize, dpi: f32) -> Result<image::RgbaImage> {
+    let geom = crate::geometry::page_geoms(doc)?
+        .get(page)
+        .copied()
+        .context("no such page")?;
     let page = doc.pages().get(page as i32)?;
-    let config = PdfRenderConfig::new()
-        .scale_page_by_factor(dpi / 72.0)
-        .render_form_data(true);
-    let bitmap = page.render_with_config(&config)?;
-    let (w, h) = (bitmap.width() as u32, bitmap.height() as u32);
-    image::RgbaImage::from_raw(w, h, bitmap.as_rgba_bytes()).context("bad bitmap size")
+    let render = |config: PdfRenderConfig| -> Result<image::RgbaImage> {
+        let bitmap = page.render_with_config(&config.scale_page_by_factor(dpi / 72.0))?;
+        let (w, h) = (bitmap.width() as u32, bitmap.height() as u32);
+        image::RgbaImage::from_raw(w, h, bitmap.as_rgba_bytes()).context("bad bitmap size")
+    };
+    let mut full = render(PdfRenderConfig::new().render_form_data(true))?;
+
+    // PDFium paints form fields (signature boxes, e-Meterai) after every other annotation,
+    // whatever their order in the file. Other readers follow the file's order, so an
+    // annotation added after a field (a signature stamped over an e-Meterai) is in front.
+    // Repaint such annotations over the fields: their pixels are where a render with
+    // annotations differs from one without (fields are not drawn in either).
+    let on_top = annotations_after_fields(&page);
+    if !on_top.is_empty() {
+        let with = render(PdfRenderConfig::new().render_form_data(false))?;
+        let without = render(
+            PdfRenderConfig::new()
+                .render_form_data(false)
+                .render_annotations(false),
+        )?;
+        let (w, h) = (full.width() as f32, full.height() as f32);
+        for r in on_top {
+            let (u1, v1, u2, v2) = geom.rect_to_display(r);
+            let x1 = (u1 * w).floor().max(0.0) as u32;
+            let y1 = (v1 * h).floor().max(0.0) as u32;
+            let x2 = ((u2 * w).ceil() as u32).min(full.width());
+            let y2 = ((v2 * h).ceil() as u32).min(full.height());
+            for y in y1..y2 {
+                for x in x1..x2 {
+                    let a = with.get_pixel(x, y);
+                    if a != without.get_pixel(x, y) {
+                        full.put_pixel(x, y, *a);
+                    }
+                }
+            }
+        }
+    }
+    Ok(full)
+}
+
+/// Bounds of the non-field annotations that come after a form field in the page's
+/// annotation order and overlap one, so they belong in front of it.
+fn annotations_after_fields(page: &PdfPage) -> Vec<crate::ops::PageRect> {
+    use crate::ops::PageRect;
+    let mut fields: Vec<PageRect> = Vec::new();
+    let mut out = Vec::new();
+    let overlaps = |a: &PageRect, b: &PageRect| {
+        a.left < b.right && b.left < a.right && a.bottom < b.top && b.bottom < a.top
+    };
+    for a in page.annotations().iter() {
+        let Ok(bounds) = a.bounds().map(PageRect::from_pdf) else {
+            continue;
+        };
+        match a.annotation_type() {
+            PdfPageAnnotationType::Widget | PdfPageAnnotationType::XfaWidget => fields.push(bounds),
+            PdfPageAnnotationType::Popup | PdfPageAnnotationType::Link => {}
+            _ if fields.iter().any(|f| overlaps(f, &bounds)) => out.push(bounds),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Writes one image per listed page into `dir` as `<stem>-<n>.<ext>`. Returns the paths.
