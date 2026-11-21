@@ -6,7 +6,7 @@ use eframe::egui::{self, Color32, RichText, Vec2};
 use penadf::gui::document::Document;
 use penadf::gui::tabs::{self, TabBarAction, TabLabel, TabStrip};
 use penadf::gui::theme;
-use penadf::gui::viewer::{Fit, PageAction, Tool, Viewer};
+use penadf::gui::viewer::{Fit, PageAction, Placement, Tool, Viewer};
 use penadf::ops::{
     self, PageRect, SearchHit, compare, create, export, forms, markup, pages, protect,
 };
@@ -73,6 +73,9 @@ pub struct PenaApp {
     search_open: bool,
     toast: Option<(String, bool, f64)>,
     signature: Option<markup::Signature>,
+    /// Saved signature image (PNG/JPEG bytes) for "Sign with image".
+    signature_image: Option<Vec<u8>>,
+    egui_ctx: egui::Context,
     show_about: bool,
     show_keys: bool,
     allow_close: bool,
@@ -105,6 +108,8 @@ impl PenaApp {
             active_hit: None,
             toast: None,
             signature,
+            signature_image: signature_image_file().and_then(|p| std::fs::read(p).ok()),
+            egui_ctx: cc.egui_ctx.clone(),
             show_about: false,
             show_keys: false,
             allow_close: false,
@@ -378,6 +383,27 @@ impl PenaApp {
                         }
                     }
                 }
+                Tool::SignImage => {
+                    if !self.require(doc.allowed.comment_and_fill || can_edit, "signing") {
+                        return;
+                    }
+                    let image = match self.signature_image.clone() {
+                        Some(i) => Some(i),
+                        None => self.choose_signature_image(),
+                    };
+                    if let Some(image) = image {
+                        let layer = if can_comment {
+                            markup::Layer::Front
+                        } else {
+                            markup::Layer::Content
+                        };
+                        let p = Placement::new(&self.egui_ctx, page, rect, image, layer);
+                        if let Some(p) = self.report(p) {
+                            self.viewer.placement = Some(p);
+                            self.info("Move or resize the signature, pick its layer, then press Enter to apply.");
+                        }
+                    }
+                }
                 Tool::Sign => {
                     if !self.require(doc.allowed.comment_and_fill || can_edit, "signing") {
                         return;
@@ -422,6 +448,31 @@ impl PenaApp {
                     },
                 };
             }
+            PageAction::PlaceImage {
+                page,
+                rect,
+                layer,
+                image,
+            } => {
+                let allowed = match layer {
+                    markup::Layer::Front => can_comment,
+                    markup::Layer::Content => can_edit,
+                };
+                if !self.require(
+                    allowed,
+                    if layer == markup::Layer::Front {
+                        "comments"
+                    } else {
+                        "editing"
+                    },
+                ) {
+                    return;
+                }
+                self.change("Signed", |b, pw| {
+                    markup::place_image(b, pw, page, rect, &image, layer)
+                });
+                self.viewer.tool = Tool::Select;
+            }
             PageAction::InkDone { page, strokes } => {
                 if !self.require(can_comment, "comments") {
                     return;
@@ -439,10 +490,32 @@ impl PenaApp {
         self.viewer.tool = Tool::Select;
     }
 
+    /// Asks for a signature image file, keeps it for this session and saves it on this PC.
+    fn choose_signature_image(&mut self) -> Option<Vec<u8>> {
+        let file = rfd::FileDialog::new()
+            .set_title("Choose your signature image (PNG with a transparent background works best)")
+            .add_filter("Images", create::IMAGE_EXTS)
+            .pick_file()?;
+        let bytes = std::fs::read(&file)
+            .map_err(anyhow::Error::from)
+            .and_then(|b| {
+                image::load_from_memory(&b).context("not an image PenaDF can read")?;
+                Ok(b)
+            });
+        let bytes = self.report(bytes)?;
+        if let Some(path) = signature_image_file() {
+            let _ = std::fs::create_dir_all(path.parent().unwrap_or(Path::new(".")));
+            let _ = std::fs::write(path, &bytes);
+        }
+        self.signature_image = Some(bytes.clone());
+        Some(bytes)
+    }
+
     fn set_tool(&mut self, tool: Tool) {
         if let Some(a) = self.viewer.take_ink() {
             self.run_page_action(a);
         }
+        self.viewer.placement = None;
         self.viewer.tool = tool;
     }
 
@@ -957,6 +1030,14 @@ impl PenaApp {
             self.dialog =
                 Dialog::Signature(dialogs::SignatureDialog::new(self.signature.clone(), None));
         }
+        let label = if self.signature_image.is_some() {
+            "Change my signature image…"
+        } else {
+            "Choose my signature image…"
+        };
+        if ui.button(label).clicked() && self.choose_signature_image().is_some() {
+            self.info("Signature image saved. Pick Sign with image and drag a box to place it.");
+        }
         if ui
             .add_enabled(has, egui::Button::new("Flatten (lock comments and fields)"))
             .clicked()
@@ -1037,6 +1118,7 @@ impl PenaApp {
                             Tool::AddText,
                             Tool::AddImage,
                             Tool::Sign,
+                            Tool::SignImage,
                         ] {
                             let selected = self.viewer.tool == tool;
                             let text = if selected {
@@ -2216,6 +2298,11 @@ fn settings_dir() -> Option<PathBuf> {
 /// Where the saved signature lives.
 fn signature_file() -> Option<PathBuf> {
     Some(settings_dir()?.join("signature.txt"))
+}
+
+/// Where the saved signature image lives (the original file's bytes).
+fn signature_image_file() -> Option<PathBuf> {
+    Some(settings_dir()?.join("signature-image"))
 }
 
 const DEFAULT_HINT_FLAG: &str = "default-hint-dismissed";

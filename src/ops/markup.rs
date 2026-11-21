@@ -232,23 +232,85 @@ pub fn add_image(
     image_bytes: &[u8],
 ) -> Result<Vec<u8>> {
     let img = image::load_from_memory(image_bytes)?;
-    let (iw, ih) = (img.width() as f32, img.height() as f32);
+    let rect = fit_keeping_aspect(rect, img.width() as f32 / img.height().max(1) as f32);
+    place_image(bytes, pw, page, rect, image_bytes, Layer::Content)
+}
+
+/// The largest rectangle with width/height `aspect` centred inside `rect`.
+pub fn fit_keeping_aspect(rect: PageRect, aspect: f32) -> PageRect {
     let (rw, rh) = (rect.right - rect.left, rect.top - rect.bottom);
-    if rw < 1.0 || rh < 1.0 {
+    let (w, h) = if rw / rh.max(1e-3) > aspect {
+        (rh * aspect, rh)
+    } else {
+        (rw, rw / aspect.max(1e-3))
+    };
+    let (x, y) = (rect.left + (rw - w) / 2.0, rect.bottom + (rh - h) / 2.0);
+    PageRect {
+        left: x,
+        bottom: y,
+        right: x + w,
+        top: y + h,
+    }
+}
+
+/// Where a placed image sits in the page's stacking order (bottom to top: page content,
+/// then annotations such as stamps, e-Meterai and signature boxes, in the order added).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Layer {
+    /// In front of everything already on the page, stamps and e-Meterai included.
+    /// Stored as a stamp annotation added last, so viewers draw it on top.
+    Front,
+    /// Part of the page content, on top of the page's text and pictures but under
+    /// stamps and other annotations. Prints and cannot be moved later.
+    Content,
+}
+
+impl Layer {
+    pub const ALL: [Layer; 2] = [Layer::Front, Layer::Content];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Layer::Front => "In front of everything (stamps, e-Meterai)",
+            Layer::Content => "On the page, under stamps",
+        }
+    }
+}
+
+/// Places an image exactly into `rect` (stretched to fill it) at the given `layer`.
+pub fn place_image(
+    bytes: &[u8],
+    pw: Option<&str>,
+    page: usize,
+    rect: PageRect,
+    image_bytes: &[u8],
+    layer: Layer,
+) -> Result<Vec<u8>> {
+    let img = image::load_from_memory(image_bytes)?;
+    let (w, h) = (rect.right - rect.left, rect.top - rect.bottom);
+    if w < 1.0 || h < 1.0 {
         bail!("the area is too small");
     }
-    let scale = (rw / iw).min(rh / ih);
-    let (w, h) = (iw * scale, ih * scale);
-    let (x, y) = (rect.left + (rw - w) / 2.0, rect.bottom + (rh - h) / 2.0);
+    let (x, y, w, h) = (
+        PdfPoints::new(rect.left),
+        PdfPoints::new(rect.bottom),
+        Some(PdfPoints::new(w)),
+        Some(PdfPoints::new(h)),
+    );
     engine::edit(bytes, pw, |doc| {
         let mut page = doc.pages().get(page as i32)?;
-        page.objects_mut().create_image_object(
-            PdfPoints::new(x),
-            PdfPoints::new(y),
-            &img,
-            Some(PdfPoints::new(w)),
-            Some(PdfPoints::new(h)),
-        )?;
+        match layer {
+            Layer::Front => {
+                let mut stamp = page.annotations_mut().create_stamp_annotation()?;
+                stamp.set_bounds(rect.to_pdf())?;
+                stamp.set_creator(&author())?;
+                stamp.set_contents("Signature")?;
+                stamp.set_is_printed(true)?;
+                stamp.objects_mut().create_image_object(x, y, &img, w, h)?;
+            }
+            Layer::Content => {
+                page.objects_mut().create_image_object(x, y, &img, w, h)?;
+            }
+        }
         Ok(())
     })
 }

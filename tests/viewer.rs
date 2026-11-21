@@ -274,3 +274,87 @@ fn right_click_menu_offers_copy_for_the_selection() {
         "the right-click keeps the selection"
     );
 }
+
+fn png_bytes(w: u32, h: u32) -> Vec<u8> {
+    let img = image::RgbaImage::from_pixel(w, h, image::Rgba([20, 20, 120, 255]));
+    let mut out = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+        .unwrap();
+    out
+}
+
+#[test]
+fn signature_image_moves_resizes_and_applies() {
+    use penadf::gui::viewer::Placement;
+    use penadf::ops::markup::Layer;
+    let mut h = harness(one_page_doc(0), Tool::SignImage);
+    let g = h.state().doc.geoms[0];
+    let start = ops::PageRect::from_corners(g.to_page(0.2, 0.4), g.to_page(0.4, 0.5));
+    let ctx = h.ctx.clone();
+    h.state_mut().viewer.placement =
+        Some(Placement::new(&ctx, 0, start, png_bytes(200, 50), Layer::Front).unwrap());
+    h.step();
+    let r0 = h.state().viewer.placement.as_ref().unwrap().rect;
+    // Proportions of the image (4:1) are kept inside the dragged box.
+    assert!(
+        ((r0.right - r0.left) / (r0.top - r0.bottom) - 4.0).abs() < 0.01,
+        "{r0:?}"
+    );
+
+    // Drag the middle of the box 0.1 page widths to the right.
+    let (cx, cy) = g.to_display(ops::PagePoint {
+        x: (r0.left + r0.right) / 2.0,
+        y: (r0.bottom + r0.top) / 2.0,
+    });
+    let from = page_pos(h.state(), cx, cy);
+    let to = page_pos(h.state(), cx + 0.1, cy);
+    drag(&mut h, from, to);
+    let r1 = h.state().viewer.placement.as_ref().unwrap().rect;
+    let page_w = g.display_size().0;
+    assert!(
+        ((r1.left - r0.left) - 0.1 * page_w).abs() < 3.0,
+        "moved {} want {}",
+        r1.left - r0.left,
+        0.1 * page_w
+    );
+    assert!(((r1.right - r1.left) - (r0.right - r0.left)).abs() < 0.5);
+
+    // Drag the bottom-right corner further right: the box grows, keeping 4:1.
+    let (u, v) = g.to_display(ops::PagePoint {
+        x: r1.right,
+        y: r1.bottom,
+    });
+    let from = page_pos(h.state(), u, v);
+    let to = page_pos(h.state(), u + 0.1, v);
+    drag(&mut h, from, to);
+    let r2 = h.state().viewer.placement.as_ref().unwrap().rect;
+    assert!(
+        r2.right - r2.left > r1.right - r1.left + 0.05 * page_w,
+        "{r1:?} -> {r2:?}"
+    );
+    assert!(
+        ((r2.right - r2.left) / (r2.top - r2.bottom) - 4.0).abs() < 0.05,
+        "{r2:?}"
+    );
+    assert!((r2.left - r1.left).abs() < 0.5 && (r2.top - r1.top).abs() < 0.5);
+
+    // Arrow key nudges 1 pt right.
+    h.key_press(egui::Key::ArrowRight);
+    h.step();
+    let r3 = h.state().viewer.placement.as_ref().unwrap().rect;
+    assert!((r3.left - r2.left - 1.0).abs() < 0.01, "{r2:?} -> {r3:?}");
+
+    // Enter applies.
+    h.key_press(egui::Key::Enter);
+    h.run_steps(2);
+    let s = h.state();
+    assert!(s.viewer.placement.is_none());
+    let Some(PageAction::PlaceImage {
+        page, rect, layer, ..
+    }) = s.actions.last().cloned()
+    else {
+        panic!("{:?}", s.actions)
+    };
+    assert_eq!((page, layer), (0, Layer::Front));
+    assert_eq!(rect, r3);
+}

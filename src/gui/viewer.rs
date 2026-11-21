@@ -3,6 +3,7 @@
 use super::document::Document;
 use super::theme;
 use crate::geometry::PageGeom;
+use crate::ops::markup::Layer;
 use crate::ops::text::Selection;
 use crate::ops::{PagePoint, PageRect, SearchHit};
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2};
@@ -20,6 +21,7 @@ pub enum Tool {
     AddText,
     AddImage,
     Sign,
+    SignImage,
 }
 
 impl Tool {
@@ -34,6 +36,7 @@ impl Tool {
             Tool::AddText => "Add text",
             Tool::AddImage => "Add image",
             Tool::Sign => "Sign",
+            Tool::SignImage => "Sign with image",
         }
     }
 
@@ -52,13 +55,21 @@ impl Tool {
             Tool::AddText => "Click where the text should start.",
             Tool::AddImage => "Drag a box where the image should go.",
             Tool::Sign => "Drag a box where your signature should go.",
+            Tool::SignImage => {
+                "Drag a box for your signature image, then move, resize and layer it before applying."
+            }
         }
     }
 
     fn drags_box(self) -> bool {
         matches!(
             self,
-            Tool::Highlight | Tool::Underline | Tool::StrikeOut | Tool::AddImage | Tool::Sign
+            Tool::Highlight
+                | Tool::Underline
+                | Tool::StrikeOut
+                | Tool::AddImage
+                | Tool::Sign
+                | Tool::SignImage
         )
     }
 }
@@ -80,6 +91,70 @@ pub enum PageAction {
         page: usize,
         strokes: Vec<Vec<PagePoint>>,
     },
+    /// "Apply" pressed on an image being placed.
+    PlaceImage {
+        page: usize,
+        rect: PageRect,
+        layer: Layer,
+        image: std::rc::Rc<Vec<u8>>,
+    },
+}
+
+/// An image (a signature) shown on a page as a box the user can move, resize and layer
+/// before it is written into the PDF.
+pub struct Placement {
+    pub page: usize,
+    pub rect: PageRect,
+    pub layer: Layer,
+    /// Keep width/height at the image's proportions while resizing (hold Shift to stretch).
+    pub aspect: f32,
+    pub image: std::rc::Rc<Vec<u8>>,
+    texture: egui::TextureHandle,
+    /// Corner being dragged (0 bottom-left, 1 bottom-right, 2 top-right, 3 top-left in
+    /// screen order) or None while moving the whole box.
+    grab: Option<Option<usize>>,
+    last_pointer: Option<PagePoint>,
+}
+
+impl Placement {
+    /// Starts placing `image` (encoded PNG/JPEG...) inside `rect`, keeping its proportions.
+    pub fn new(
+        ctx: &egui::Context,
+        page: usize,
+        rect: PageRect,
+        image: Vec<u8>,
+        layer: Layer,
+    ) -> anyhow::Result<Self> {
+        let img = image::load_from_memory(&image)?.into_rgba8();
+        let aspect = img.width() as f32 / img.height().max(1) as f32;
+        let color = egui::ColorImage::from_rgba_unmultiplied(
+            [img.width() as usize, img.height() as usize],
+            img.as_raw(),
+        );
+        let texture = ctx.load_texture("placement", color, egui::TextureOptions::LINEAR);
+        Ok(Self {
+            page,
+            rect: crate::ops::markup::fit_keeping_aspect(rect, aspect),
+            layer,
+            aspect,
+            image: std::rc::Rc::new(image),
+            texture,
+            grab: None,
+            last_pointer: None,
+        })
+    }
+
+    fn translate(&mut self, dx: f32, dy: f32) {
+        self.rect.left += dx;
+        self.rect.right += dx;
+        self.rect.bottom += dy;
+        self.rect.top += dy;
+    }
+}
+
+enum PlacementOutcome {
+    Apply,
+    Cancel,
 }
 
 pub struct Viewer {
@@ -98,6 +173,8 @@ pub struct Viewer {
     selecting: bool,
     /// "Copy" chosen in the right-click menu; the app reads it with `take_copy_request`.
     copy_requested: bool,
+    /// An image being positioned on a page (Sign with image).
+    pub placement: Option<Placement>,
 }
 
 #[derive(Clone, Copy)]
@@ -120,6 +197,7 @@ impl Default for Viewer {
             selection: None,
             selecting: false,
             copy_requested: false,
+            placement: None,
         }
     }
 }
@@ -300,8 +378,15 @@ impl Viewer {
                             );
                         }
                     }
+                } else if self.placement.is_some() {
+                    // While placing an image, the page only moves and resizes that image.
                 } else if let Some(a) = self.handle_tool(&response, index, rect, geom, &painter) {
                     action = Some(a);
+                }
+                if self.placement.as_ref().is_some_and(|p| p.page == index)
+                    && let Some(a) = self.edit_placement(ui, index, rect, geom, &painter)
+                {
+                    action = a;
                 }
                 // Ink drawn so far on this page.
                 if self.ink_page == Some(index) {
@@ -412,6 +497,264 @@ impl Viewer {
     /// True while a text selection drag is under way (the page view should not scroll then).
     pub fn is_selecting(&self) -> bool {
         self.selecting
+    }
+
+    /// Draws the image being placed with its frame and corner handles, and lets the user
+    /// move it (drag inside), resize it (drag a corner; Shift stretches), nudge it (arrow
+    /// keys; Shift for bigger steps), pick its layer, and apply (Enter) or cancel (Esc).
+    /// Returns `Some(action)` when the placement ends.
+    fn edit_placement(
+        &mut self,
+        ui: &mut egui::Ui,
+        page: usize,
+        page_rect: Rect,
+        geom: PageGeom,
+        painter: &egui::Painter,
+    ) -> Option<Option<PageAction>> {
+        let to_page = |p: Pos2| {
+            let uv = (p - page_rect.min) / page_rect.size();
+            geom.to_page(uv.x.clamp(0.0, 1.0), uv.y.clamp(0.0, 1.0))
+        };
+        let to_screen = |r: PageRect| {
+            let (u1, v1, u2, v2) = geom.rect_to_display(r);
+            Rect::from_min_max(
+                page_rect.lerp_inside(Vec2::new(u1, v1)),
+                page_rect.lerp_inside(Vec2::new(u2, v2)),
+            )
+        };
+        let p = self.placement.as_mut()?;
+        let screen = to_screen(p.rect);
+
+        // Corner handles first in id order but interacted last, so they win over the body.
+        let body = ui.interact(
+            screen,
+            ui.scope_id().with(("placement", page)),
+            Sense::drag(),
+        );
+        let corners = [
+            screen.left_bottom(),
+            screen.right_bottom(),
+            screen.right_top(),
+            screen.left_top(),
+        ];
+        let handle_size = Vec2::splat(10.0);
+        let mut handle_hover = None;
+        for (i, c) in corners.iter().enumerate() {
+            let r = ui.interact(
+                Rect::from_center_size(*c, handle_size + Vec2::splat(6.0)),
+                ui.scope_id().with(("placement-corner", page, i)),
+                Sense::drag(),
+            );
+            if r.hovered() || r.dragged() {
+                handle_hover = Some(i);
+                let icon = if i % 2 == 0 {
+                    egui::CursorIcon::ResizeNeSw
+                } else {
+                    egui::CursorIcon::ResizeNwSe
+                };
+                ui.ctx().set_cursor_icon(icon);
+            }
+            if r.drag_started() {
+                p.grab = Some(Some(i));
+            }
+            if r.dragged()
+                && p.grab == Some(Some(i))
+                && let Some(pos) = r.interact_pointer_pos()
+            {
+                let stretch = ui.input(|inp| inp.modifiers.shift);
+                let opposite = to_page(corners[(i + 2) % 4]);
+                let mut moved = to_page(pos);
+                if !stretch {
+                    // Keep proportions: grow the box from the fixed corner along the
+                    // larger of the two pointer movements.
+                    let (dx, dy) = (moved.x - opposite.x, moved.y - opposite.y);
+                    let w = dx.abs().max(dy.abs() * p.aspect);
+                    let h = w / p.aspect;
+                    moved = PagePoint {
+                        x: opposite.x + w.copysign(dx),
+                        y: opposite.y + h.copysign(dy),
+                    };
+                }
+                let r = PageRect::from_corners(opposite, moved);
+                if r.right - r.left >= 4.0 && r.top - r.bottom >= 4.0 {
+                    p.rect = r;
+                }
+            }
+            if r.drag_stopped() {
+                p.grab = None;
+            }
+        }
+        if handle_hover.is_none() && (body.hovered() || body.dragged()) {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+        }
+        if body.drag_started() && p.grab.is_none() {
+            p.grab = Some(None);
+            p.last_pointer = body.interact_pointer_pos().map(to_page);
+        }
+        if body.dragged()
+            && p.grab == Some(None)
+            && let Some(pos) = body.interact_pointer_pos()
+        {
+            // Unclamped page point so the box can be dragged to the page edge smoothly.
+            let uv = (pos - page_rect.min) / page_rect.size();
+            let now = geom.to_page(uv.x, uv.y);
+            if let Some(prev) = p.last_pointer {
+                p.translate(now.x - prev.x, now.y - prev.y);
+            }
+            p.last_pointer = Some(now);
+        }
+        if body.drag_stopped() && p.grab == Some(None) {
+            p.grab = None;
+            p.last_pointer = None;
+        }
+
+        // Keyboard: arrows nudge by 1 pt (10 pt with Shift), on screen directions.
+        let mut outcome = None;
+        if !ui.ctx().egui_wants_keyboard_input() {
+            ui.input_mut(|inp| {
+                let step = if inp.modifiers.shift { 10.0 } else { 1.0 };
+                for (key, du, dv) in [
+                    (egui::Key::ArrowLeft, -1.0, 0.0),
+                    (egui::Key::ArrowRight, 1.0, 0.0),
+                    (egui::Key::ArrowUp, 0.0, -1.0),
+                    (egui::Key::ArrowDown, 0.0, 1.0),
+                ] {
+                    if inp.consume_key(inp.modifiers, key) {
+                        let a = geom.to_page(0.5, 0.5);
+                        let (w, h) = geom.display_size();
+                        let b = geom.to_page(0.5 + du * step / w, 0.5 + dv * step / h);
+                        p.translate(b.x - a.x, b.y - a.y);
+                    }
+                }
+                if inp.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
+                    outcome = Some(PlacementOutcome::Apply);
+                }
+                if inp.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
+                    outcome = Some(PlacementOutcome::Cancel);
+                }
+            });
+        }
+
+        // Keep the box on the page.
+        let crop = geom.crop;
+        let (w, h) = (p.rect.right - p.rect.left, p.rect.top - p.rect.bottom);
+        let dx = (crop.left - p.rect.left).max(0.0) - (p.rect.right - crop.right).max(0.0);
+        let dy = (crop.bottom - p.rect.bottom).max(0.0) - (p.rect.top - crop.top).max(0.0);
+        if w <= crop.right - crop.left && h <= crop.top - crop.bottom {
+            p.translate(dx, dy);
+        }
+
+        let screen = to_screen(p.rect);
+        painter.image(
+            p.texture.id(),
+            screen,
+            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        painter.rect_stroke(
+            screen,
+            0.0,
+            Stroke::new(1.5, theme::ACCENT),
+            StrokeKind::Outside,
+        );
+        for c in [
+            screen.left_bottom(),
+            screen.right_bottom(),
+            screen.right_top(),
+            screen.left_top(),
+        ] {
+            let r = Rect::from_center_size(c, handle_size);
+            painter.rect_filled(r, 2.0, Color32::WHITE);
+            painter.rect_stroke(r, 2.0, Stroke::new(1.5, theme::ACCENT), StrokeKind::Inside);
+        }
+
+        // Controls under the box (above it when there is no room below).
+        let below = screen.left_bottom() + Vec2::new(0.0, 10.0);
+        let pos = if below.y + 120.0 > ui.clip_rect().bottom() {
+            screen.left_top() - Vec2::new(0.0, 130.0)
+        } else {
+            below
+        };
+        egui::Area::new(ui.scope_id().with("placement-controls"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Layer");
+                        egui::ComboBox::from_id_salt("placement-layer")
+                            .selected_text(p.layer.label())
+                            .width(260.0)
+                            .show_ui(ui, |ui| {
+                                for l in Layer::ALL {
+                                    ui.selectable_value(&mut p.layer, l, l.label());
+                                }
+                            });
+                    });
+                    ui.horizontal(|ui| {
+                        let mut w = p.rect.right - p.rect.left;
+                        let mut h = p.rect.top - p.rect.bottom;
+                        ui.label("Width");
+                        let cw = ui.add(
+                            egui::DragValue::new(&mut w)
+                                .range(4.0..=2000.0)
+                                .suffix(" pt")
+                                .speed(1.0),
+                        );
+                        ui.label("Height");
+                        let ch = ui.add(
+                            egui::DragValue::new(&mut h)
+                                .range(4.0..=2000.0)
+                                .suffix(" pt")
+                                .speed(1.0),
+                        );
+                        if cw.changed() {
+                            p.rect.right = p.rect.left + w;
+                            let new_h = w / p.aspect;
+                            p.rect.bottom = p.rect.top - new_h;
+                        } else if ch.changed() {
+                            p.rect.bottom = p.rect.top - h;
+                            p.rect.right = p.rect.left + h * p.aspect;
+                        }
+                    });
+                    ui.label(
+                        egui::RichText::new(
+                            "Drag to move, drag a corner to resize (Shift stretches), arrow keys nudge.",
+                        )
+                        .small()
+                        .color(theme::MUTED),
+                    );
+                    ui.horizontal(|ui| {
+                        let apply = ui.add(
+                            egui::Button::new(
+                                egui::RichText::new("Apply (Enter)").color(Color32::WHITE),
+                            )
+                            .fill(theme::ACCENT),
+                        );
+                        if apply.clicked() {
+                            outcome = Some(PlacementOutcome::Apply);
+                        }
+                        if ui.button("Cancel (Esc)").clicked() {
+                            outcome = Some(PlacementOutcome::Cancel);
+                        }
+                    });
+                });
+            });
+        match outcome? {
+            PlacementOutcome::Cancel => {
+                self.placement = None;
+                Some(None)
+            }
+            PlacementOutcome::Apply => {
+                let p = self.placement.take()?;
+                Some(Some(PageAction::PlaceImage {
+                    page: p.page,
+                    rect: p.rect,
+                    layer: p.layer,
+                    image: p.image,
+                }))
+            }
+        }
     }
 
     fn handle_tool(

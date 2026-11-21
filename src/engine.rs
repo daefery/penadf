@@ -96,14 +96,74 @@ pub fn open(bytes: Vec<u8>, password: Option<&str>) -> Result<PdfDocument<'stati
 
 /// Opens a document, lets `edit` change it in place, and returns the saved bytes.
 /// Encryption, bookmarks and form data of the original are kept.
+///
+/// A digitally signed PDF (a digital signature or an e-Meterai) is saved as an incremental
+/// update: the original bytes stay as they are and the change is appended, so the existing
+/// signatures stay valid. Rewriting the file would break them.
 pub fn edit(
     bytes: &[u8],
     password: Option<&str>,
     edit: impl FnOnce(&mut PdfDocument<'static>) -> Result<()>,
 ) -> Result<Vec<u8>> {
     let mut doc = open(bytes.to_vec(), password)?;
+    let signed = !doc.signatures().is_empty();
     edit(&mut doc)?;
-    doc.save_to_bytes().context("could not save PDF")
+    if signed {
+        save_incremental(&doc)
+    } else {
+        doc.save_to_bytes().context("could not save PDF")
+    }
+}
+
+/// True if the PDF carries a digital signature (an e-Meterai is one).
+pub fn is_signed(bytes: &[u8], password: Option<&str>) -> Result<bool> {
+    Ok(!open(bytes.to_vec(), password)?.signatures().is_empty())
+}
+
+/// PDFium's file-writer callback with the output buffer behind it.
+#[repr(C)]
+struct ByteSink {
+    file_write: FPDF_FILEWRITE,
+    out: Vec<u8>,
+}
+
+unsafe extern "C" fn write_block(
+    this: *mut FPDF_FILEWRITE,
+    data: *const std::os::raw::c_void,
+    size: std::os::raw::c_ulong,
+) -> std::os::raw::c_int {
+    // `file_write` is the first field of the #[repr(C)] ByteSink, so the pointers match.
+    let sink = unsafe { &mut *(this as *mut ByteSink) };
+    if size > 0 {
+        let bytes = unsafe { std::slice::from_raw_parts(data as *const u8, size as usize) };
+        sink.out.extend_from_slice(bytes);
+    }
+    1
+}
+
+/// Saves with `FPDF_INCREMENTAL`: the original file followed by an update section.
+fn save_incremental(doc: &PdfDocument) -> Result<Vec<u8>> {
+    const FPDF_INCREMENTAL: FPDF_DWORD = 1;
+    let raw = &engine()?.raw;
+    let mut sink = ByteSink {
+        file_write: FPDF_FILEWRITE {
+            version: 1,
+            WriteBlock: Some(write_block),
+        },
+        out: Vec::new(),
+    };
+    let ok = unsafe {
+        raw.FPDF_SaveAsCopy(
+            raw.get_handle_from_document(doc),
+            &mut sink.file_write,
+            FPDF_INCREMENTAL,
+        )
+    };
+    if raw.is_true(ok) {
+        Ok(sink.out)
+    } else {
+        Err(anyhow!("could not save PDF"))
+    }
 }
 
 /// Raw permission bits of an open document (PDF 32000 table 22): bit 3 print, 4 modify,

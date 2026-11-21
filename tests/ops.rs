@@ -578,3 +578,135 @@ fn selecting_text_on_a_real_page_copies_exactly_that_text() {
         "Harga sewa Rp 96.000.000 per tahun.\nDibayar di muka.\nPasal 4"
     );
 }
+
+#[test]
+fn signature_image_layers() {
+    use pdfium_render::prelude::{PdfPageAnnotationCommon as _, PdfPageObjectsCommon};
+    let pdf = sample(1);
+    let rect = PageRect {
+        left: 100.0,
+        bottom: 100.0,
+        right: 300.0,
+        top: 160.0,
+    };
+    let img = png(40, 12);
+
+    // Front: a stamp annotation added after existing ones, holding the image.
+    let front = markup::place_image(&pdf, None, 0, rect, &img, markup::Layer::Front).unwrap();
+    {
+        let doc = engine::open(front.clone(), None).unwrap();
+        let page = doc.pages().get(0).unwrap();
+        let annots = page.annotations();
+        let last = annots.get(annots.len() - 1).unwrap();
+        assert_eq!(
+            last.annotation_type(),
+            pdfium_render::prelude::PdfPageAnnotationType::Stamp
+        );
+        let b = PageRect::from_pdf(last.bounds().unwrap());
+        assert!(
+            (b.left - 100.0).abs() < 1.0 && (b.top - 160.0).abs() < 1.0,
+            "{b:?}"
+        );
+        let img = export::render_page(&doc, 0, 72.0).unwrap();
+        let h = img.height();
+        // Centre of the rect in pixels (y down): x=200, y=h-130. The PNG is red.
+        let px = img.get_pixel(200, h - 130);
+        assert!(px[0] > 150 && px[1] < 100, "stamp not drawn: {px:?}");
+    }
+
+    // Content: last page object.
+    let content = markup::place_image(&pdf, None, 0, rect, &img, markup::Layer::Content).unwrap();
+    let doc = engine::open(content, None).unwrap();
+    let page = doc.pages().get(0).unwrap();
+    let objects = page.objects();
+    assert!(
+        objects
+            .get(objects.len() - 1)
+            .unwrap()
+            .as_image_object()
+            .is_some()
+    );
+}
+
+#[test]
+fn fit_keeping_aspect_centres_inside_the_box() {
+    let r = markup::fit_keeping_aspect(
+        PageRect {
+            left: 0.0,
+            bottom: 0.0,
+            right: 100.0,
+            top: 100.0,
+        },
+        2.0,
+    );
+    assert_eq!(
+        r,
+        PageRect {
+            left: 0.0,
+            bottom: 25.0,
+            right: 100.0,
+            top: 75.0
+        }
+    );
+}
+
+/// A one-page PDF with a filled /Sig field, as an e-Meterai or digital signature leaves it.
+fn signed_sample() -> Vec<u8> {
+    use lopdf::{Object, dictionary};
+    let mut doc = lopdf::Document::load_mem(&sample(1)).unwrap();
+    let sig_value = doc.add_object(dictionary! {
+        "Type" => "Sig",
+        "Filter" => "Adobe.PPKLite",
+        "SubFilter" => "adbe.pkcs7.detached",
+        "ByteRange" => vec![0.into(), 10.into(), 20.into(), 30.into()],
+        "Contents" => Object::String(vec![0u8; 16], lopdf::StringFormat::Hexadecimal),
+    });
+    let page_id = *doc.get_pages().get(&1).unwrap();
+    let field = doc.add_object(dictionary! {
+        "Type" => "Annot",
+        "Subtype" => "Widget",
+        "FT" => "Sig",
+        "T" => Object::string_literal("e-Meterai"),
+        "V" => sig_value,
+        "Rect" => vec![100.into(), 100.into(), 200.into(), 200.into()],
+        "P" => page_id,
+        "F" => 4,
+    });
+    doc.get_object_mut(page_id)
+        .unwrap()
+        .as_dict_mut()
+        .unwrap()
+        .set("Annots", vec![field.into()]);
+    let acro = doc.add_object(dictionary! { "Fields" => vec![field.into()], "SigFlags" => 3 });
+    doc.catalog_mut().unwrap().set("AcroForm", acro);
+    let mut out = Vec::new();
+    doc.save_to(&mut out).unwrap();
+    out
+}
+
+#[test]
+fn editing_a_signed_pdf_appends_and_keeps_the_signed_bytes() {
+    let signed = signed_sample();
+    assert!(engine::is_signed(&signed, None).unwrap());
+    assert!(!engine::is_signed(&sample(1), None).unwrap());
+    let rect = PageRect {
+        left: 120.0,
+        bottom: 120.0,
+        right: 260.0,
+        top: 170.0,
+    };
+    let out =
+        markup::place_image(&signed, None, 0, rect, &png(40, 12), markup::Layer::Front).unwrap();
+    assert!(out.len() > signed.len());
+    assert!(out.starts_with(&signed), "original bytes were rewritten");
+    // The update is readable and the stamp is on top of the signature widget.
+    let doc = engine::open(out, None).unwrap();
+    let page = doc.pages().get(0).unwrap();
+    let kinds: Vec<_> = page
+        .annotations()
+        .iter()
+        .map(|a| a.annotation_type())
+        .collect();
+    use pdfium_render::prelude::PdfPageAnnotationType as T;
+    assert_eq!(kinds, vec![T::Widget, T::Stamp]);
+}
